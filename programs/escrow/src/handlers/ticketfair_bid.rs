@@ -2,7 +2,9 @@
 
 use anchor_lang::prelude::*;
 use crate::state::{Bid, Event, Ticket};
-// Temporarily commented out for build
+
+// We'll add this import back when we properly integrate Bubblegum
+// #[cfg(feature = "bubblegum")]
 // use mpl_bubblegum::instruction as bubblegum_instruction;
 
 #[derive(Accounts)]
@@ -139,37 +141,42 @@ pub fn award_ticket(
         return Err(error!(crate::error::ErrorCode::CustomError)); // Replace with TicketsSoldOut if desired
     }
 
-    // Temporarily commented out for build
+    // We'll use these in both branches
+    let _event_pda_seeds: &[&[u8]] = &[b"event", event.organizer.as_ref(), &[event.bump]];
+
     // Bubblegum CPI: Transfer cNFT from event PDA to winner
-    /*
-    let transfer_ix = bubblegum_instruction::transfer_v2(
-        context.accounts.bubblegum_program.key(),
-        context.accounts.merkle_tree.key(),
-        event.key(), // event PDA as current owner
-        bid.bidder,  // new owner (winner)
-        cnft_asset_id,
-        event.key(), // event PDA as authority
-        None, // leaf delegate (optional)
-        None, // collection (optional)
-    );
-    */
-    let event_pda_seeds: &[&[u8]] = &[b"event", event.organizer.as_ref(), &[event.bump]];
-    // Temporarily commented out for build
-    /*
-    anchor_lang::solana_program::program::invoke_signed(
-        &transfer_ix,
-        &[
-            context.accounts.bubblegum_program.to_account_info(),
-            context.accounts.merkle_tree.to_account_info(),
-            event.to_account_info(),
-            context.accounts.log_wrapper.to_account_info(),
-            context.accounts.compression_program.to_account_info(),
-            context.accounts.noop_program.to_account_info(),
-            context.accounts.system_program.to_account_info(),
-        ],
-        &[event_pda_seeds],
-    ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?
-    */
+    #[cfg(feature = "bubblegum")]
+    {
+        // This code will be enabled when we properly integrate Bubblegum
+        // let transfer_ix = bubblegum_instruction::transfer_v2(
+        //     context.accounts.bubblegum_program.key(),
+        //     context.accounts.merkle_tree.key(),
+        //     event.key(), // event PDA as current owner
+        //     bid.bidder,  // new owner (winner)
+        //     cnft_asset_id,
+        //     event.key(), // event PDA as authority
+        //     None, // leaf delegate (optional)
+        //     None, // collection (optional)
+        // );
+        //
+        // anchor_lang::solana_program::program::invoke_signed(
+        //     &transfer_ix,
+        //     &[
+        //         context.accounts.bubblegum_program.to_account_info(),
+        //         context.accounts.merkle_tree.to_account_info(),
+        //         event.to_account_info(),
+        //         context.accounts.log_wrapper.to_account_info(),
+        //         context.accounts.compression_program.to_account_info(),
+        //         context.accounts.noop_program.to_account_info(),
+        //         context.accounts.system_program.to_account_info(),
+        //     ],
+        //     &[_event_pda_seeds],
+        // ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+    }
+
+    // When bubblegum feature is not enabled, we just simulate the transfer
+    #[cfg(not(feature = "bubblegum"))]
+    msg!("Bubblegum feature not enabled - simulating cNFT transfer for asset ID: {}", cnft_asset_id);
 
     // Mark bid as awarded
     bid.status = 1;
@@ -251,4 +258,4 @@ pub fn refund_bid(
     }
 
     Ok(())
-} 
+}
