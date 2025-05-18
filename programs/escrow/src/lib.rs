@@ -40,9 +40,20 @@ pub mod escrow {
         context: Context<CreateEventAccountConstraints>,
         metadata_url: String,
         ticket_supply: u32,
-        ticket_price: u64,
+        start_price: u64,
+        end_price: u64,
+        auction_start_time: i64,
+        auction_end_time: i64,
     ) -> Result<()> {
-        handlers::ticketfair_event::create_event(context, metadata_url, ticket_supply, ticket_price)
+        handlers::ticketfair_event::create_event(
+            context, 
+            metadata_url, 
+            ticket_supply, 
+            start_price, 
+            end_price, 
+            auction_start_time, 
+            auction_end_time
+        )
     }
 
     /// Buy a ticket for a Ticketfair event.

@@ -8,9 +8,8 @@ use anchor_lang::prelude::System;
 use anchor_lang::prelude::Context;
 use anchor_lang::prelude::Result;
 
-// Import your program and state/handlers as needed
-// use crate::state::*;
-// use crate::handlers::*;
+// Import program state
+use escrow::state;
 
 #[cfg(test)]
 mod tests {
@@ -49,7 +48,7 @@ mod tests {
         let auction_end_time = auction_start_time + 3600;
 
         // Simulate event account
-        let mut event = crate::state::Event {
+        let mut event = state::Event {
             organizer,
             metadata_url: metadata_url.clone(),
             ticket_supply,
@@ -86,7 +85,7 @@ mod tests {
         let bidder = test_pubkey(3);
         let event = test_pubkey(4);
         let amount = 1_000_000u64;
-        let mut bid = crate::state::Bid {
+        let mut bid = state::Bid {
             bidder,
             event,
             amount,
@@ -106,7 +105,7 @@ mod tests {
         let owner = test_pubkey(5);
         let event = test_pubkey(6);
         let cnft_asset_id = test_pubkey(7);
-        let mut ticket = crate::state::Ticket {
+        let mut ticket = state::Ticket {
             owner,
             event,
             status: 0,
@@ -124,7 +123,7 @@ mod tests {
     #[test]
     fn test_refunds() {
         // Simulate a full refund for a losing bid
-        let mut bid = crate::state::Bid {
+        let mut bid = state::Bid {
             bidder: test_pubkey(8),
             event: test_pubkey(9),
             amount: 2_000_000,
@@ -136,7 +135,7 @@ mod tests {
         assert_eq!(bid.status, 2);
 
         // Simulate a partial refund for a winning bid (overbid)
-        let mut bid2 = crate::state::Bid {
+        let mut bid2 = state::Bid {
             bidder: test_pubkey(10),
             event: test_pubkey(11),
             amount: 2_000_000,
@@ -155,7 +154,7 @@ mod tests {
     #[test]
     fn test_bubblegum_cnft_logic() {
         // Simulate cNFT minting, transfer, and burn logic
-        let mut event = crate::state::Event {
+        let mut event = state::Event {
             organizer: test_pubkey(12),
             metadata_url: "https://example.com/event.json".to_string(),
             ticket_supply: 2,
@@ -177,7 +176,7 @@ mod tests {
         event.cnft_asset_ids.push(asset_id2);
         assert_eq!(event.cnft_asset_ids.len(), 2);
         // Transfer cNFT (simulate by removing from event and assigning to ticket)
-        let mut ticket = crate::state::Ticket {
+        let mut ticket = state::Ticket {
             owner: test_pubkey(16),
             event: event.merkle_tree,
             status: 0,
