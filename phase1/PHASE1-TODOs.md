@@ -17,8 +17,8 @@ This checklist provides explicit, actionable steps for modifying and extending t
     - [x] `refund_bid` (refund overbid or losing bid)
 - [x] Ensure each handler validates accounts and enforces Dutch auction business logic.
 - [x] Add/modify instruction context structs as needed.
-- [ ] Complete Bubblegum CPI minting loop and asset ID tracking in event creation handler.
-- [ ] Implement/refine refund logic and finalize all handler flows.
+- [x] Implement/refine refund logic and finalize all handler flows.
+- [ ] Complete Bubblegum CPI minting loop and asset ID tracking in event creation handler (setup done, need dependency resolution).
 
 ## 3. **State (Accounts & Data Structures)**
 - [x] Define/modify Anchor `#[account]` structs for:
@@ -40,8 +40,9 @@ This checklist provides explicit, actionable steps for modifying and extending t
 - [x] Ensure all handlers return meaningful errors.
 
 ## 6. **Testing**
-- [ ] Write unit tests for each instruction handler.
-- [ ] Write integration tests for auction lifecycle (create, bid, award, refund).
+- [x] Write basic unit tests for account operations and validation.
+- [ ] Complete comprehensive unit tests for each instruction handler.
+- [ ] Write TypeScript integration tests for auction lifecycle (create, bid, award, refund).
 - [ ] Prepare scripts for deploying and testing on Solana devnet.
 
 ## 7. **Documentation & Diagrams**
@@ -52,7 +53,8 @@ This checklist provides explicit, actionable steps for modifying and extending t
 ## 8. **Metaplex Bubblegum v2 Integration**
 - [x] Plan and document Bubblegum v2 integration for ticketing.
 - [x] Implement PDA authority and Merkle Tree management helpers.
-- [ ] Complete CPI integration:
+- [x] Design and scaffold CPI integration (structure complete, implementation ready)
+- [ ] Complete dependency resolution and actual CPI integration:
     - [ ] At event creation, mint cNFTs for ticket supply to a PDA holding authority.
     - [ ] Store Merkle Tree address and cNFT asset IDs in event account for on-chain supply enforcement.
     - [ ] On awarding tickets, transfer cNFTs from the PDA to winners using `transferV2`.
@@ -60,10 +62,11 @@ This checklist provides explicit, actionable steps for modifying and extending t
 
 ---
 
-**Next Steps:**
-- Complete Bubblegum CPI minting loop and asset ID tracking in event creation handler.
-- Implement/refine refund logic and finalize all handler flows.
-- Begin writing and running unit/integration tests.
-- Continue updating documentation as implementation progresses.
+**Next Steps (Updated May 18, 2025):**
+- Write TypeScript integration tests for TicketFair functionality
+- Test deployment on localnet to confirm all instructions work properly
+- Resolve Bubblegum dependency issues (evaluate whether to defer to Phase 1.5)
+- Complete comprehensive unit tests for all instruction handlers
+- Generate and test TypeScript client
 
 **Reference:** See [PHASE1-PLAN.md](./PHASE1-PLAN.md) for context and high-level goals. 
