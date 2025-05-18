@@ -8,25 +8,26 @@ This checklist provides explicit, actionable steps for modifying and extending t
 - [x] Review the current escrow program structure and identify reusable modules.
 - [x] Create/rename program modules for Ticketfair (e.g., `ticketfair_event`, `ticketfair_ticket`, `ticketfair_user`).
 - [x] Ensure program entrypoints are documented and ready for new instructions.
-- [ ] Create new modules for Dutch auction logic (e.g., `ticketfair_bid`).
+- [x] Create new modules for Dutch auction logic (e.g., `ticketfair_bid`).
 
 ## 2. **Handlers (Instructions)**
-- [ ] Implement the following instruction handlers:
-    - [ ] `place_bid` (escrow funds at current auction price)
-    - [ ] `award_ticket` (organizer awards ticket to a bid)
-    - [ ] `refund_bid` (refund overbid or losing bid)
-- [ ] Ensure each handler validates accounts and enforces Dutch auction business logic.
-- [ ] Add/modify instruction context structs as needed.
+- [x] Scaffold the following instruction handlers:
+    - [x] `place_bid` (escrow funds at current auction price)
+    - [x] `award_ticket` (organizer awards ticket to a bid)
+    - [x] `refund_bid` (refund overbid or losing bid)
+- [x] Ensure each handler validates accounts and enforces Dutch auction business logic.
+- [x] Add/modify instruction context structs as needed.
+- [ ] Complete Bubblegum CPI minting loop and asset ID tracking in event creation handler.
+- [ ] Implement/refine refund logic and finalize all handler flows.
 
 ## 3. **State (Accounts & Data Structures)**
-- [ ] Define/modify Anchor `#[account]` structs for:
-    - [ ] `Event` (with auction parameters)
-    - [ ] `Bid` (bidder, amount, status, bump)
-    - [ ] `Ticket` (awarded, claimed, refunded, off-chain ref, bump)
-    - [ ] `User` (optional)
-    - [ ] `Escrow` (if needed for holding funds)
-- [ ] Add fields for future off-chain data references (e.g., Walrus blob URL or ID).
-- [ ] Document all fields and relationships in code comments.
+- [x] Define/modify Anchor `#[account]` structs for:
+    - [x] `Event` (with auction parameters, Merkle Tree, cNFT asset IDs)
+    - [x] `Bid` (bidder, amount, status, bump)
+    - [x] `Ticket` (awarded, claimed, refunded, off-chain ref, bump, cNFT asset ID)
+    - [x] `User` (optional)
+- [x] Add fields for future off-chain data references (e.g., Walrus blob URL or ID).
+- [x] Document all fields and relationships in code comments.
 
 ## 4. **Constants**
 - [ ] Review and update constants (e.g., min/max bid, auction timing, refund windows).
@@ -34,9 +35,9 @@ This checklist provides explicit, actionable steps for modifying and extending t
 - [ ] Document all constants for clarity.
 
 ## 5. **Error Handling**
-- [ ] Review and update the error enum (e.g., `errors.rs`).
-- [ ] Add new error codes for Dutch auction logic (e.g., bid too low, auction closed, already awarded).
-- [ ] Ensure all handlers return meaningful errors.
+- [x] Review and update the error enum (e.g., `errors.rs`).
+- [x] Add new error codes for Dutch auction logic (e.g., bid not at current price, auction closed, already awarded).
+- [x] Ensure all handlers return meaningful errors.
 
 ## 6. **Testing**
 - [ ] Write unit tests for each instruction handler.
@@ -44,18 +45,25 @@ This checklist provides explicit, actionable steps for modifying and extending t
 - [ ] Prepare scripts for deploying and testing on Solana devnet.
 
 ## 7. **Documentation & Diagrams**
-- [ ] Update inline Rust docs for all accounts, handlers, and modules.
-- [ ] Update or create architecture and workflow diagrams as needed.
+- [x] Update inline Rust docs for all accounts, handlers, and modules.
+- [x] Update or create architecture and workflow diagrams as needed.
+- [x] Keep all plans and technical decisions up-to-date for advisor review.
 
 ## 8. **Metaplex Bubblegum v2 Integration**
-- [ ] Integrate Metaplex Bubblegum v2 for ticketing:
-    - [ ] At event creation, create Merkle Tree (if needed) and mint cNFTs for ticket supply to a PDA holding authority.
+- [x] Plan and document Bubblegum v2 integration for ticketing.
+- [x] Implement PDA authority and Merkle Tree management helpers.
+- [ ] Complete CPI integration:
+    - [ ] At event creation, mint cNFTs for ticket supply to a PDA holding authority.
     - [ ] Store Merkle Tree address and cNFT asset IDs in event account for on-chain supply enforcement.
     - [ ] On awarding tickets, transfer cNFTs from the PDA to winners using `transferV2`.
     - [ ] At auction close, burn unsold cNFTs using `burnV2`.
-    - [ ] Plan PDA authority and Merkle Tree management with advisors.
-    - [ ] Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
 
 ---
+
+**Next Steps:**
+- Complete Bubblegum CPI minting loop and asset ID tracking in event creation handler.
+- Implement/refine refund logic and finalize all handler flows.
+- Begin writing and running unit/integration tests.
+- Continue updating documentation as implementation progresses.
 
 **Reference:** See [PHASE1-PLAN.md](./PHASE1-PLAN.md) for context and high-level goals. 

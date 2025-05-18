@@ -63,6 +63,16 @@
 - Unsold cNFTs are burned at auction close using `burnV2`.
 - Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
 
+### PDA Authority and Merkle Tree Management for Bubblegum v2
+- The event PDA (derived from [b"event", organizer_pubkey]) is the authority for minting, holding, transferring, and burning cNFTs.
+- Each event uses its own Merkle Tree for supply enforcement.
+- The event PDA is set as the tree delegate/authority.
+- At event creation, the event PDA mints the full supply of cNFTs to itself, storing asset IDs in the event account.
+- Awarding tickets transfers cNFTs from the PDA to winners.
+- Unsold cNFTs are burned at auction close.
+- This ensures on-chain, verifiable ticket supply and secure authority management.
+- Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
+
 ---
 
 ## Next Steps

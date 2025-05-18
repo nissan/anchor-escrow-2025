@@ -33,84 +33,50 @@
 - PDA authority and Merkle Tree management will be planned and reviewed with advisors.
 - See: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
 
+### PDA Authority and Merkle Tree Management for Bubblegum v2
+- The event PDA (derived from [b"event", organizer_pubkey]) acts as the on-chain authority for minting, holding, transferring, and burning cNFTs (tickets).
+- Each event uses its own Merkle Tree for clear supply enforcement and separation.
+- The event PDA is set as the tree delegate/authority when the Merkle Tree is created (off-chain or via a separate instruction).
+- At event creation, the event PDA mints the full supply of cNFTs to itself using Bubblegum's `mintV2` CPI, storing asset IDs in the event account.
+- When awarding tickets, the event PDA transfers cNFTs to winners using `transferV2`.
+- At auction close, the event PDA burns unsold cNFTs using `burnV2`.
+- This approach ensures on-chain, verifiable ticket supply and secure authority management.
+- Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
+
+#### Summary Table
+| Step                | Authority/PDA         | Merkle Tree Management         | Notes                                  |
+|---------------------|----------------------|-------------------------------|----------------------------------------|
+| Event Creation      | Event PDA            | One tree per event            | PDA is tree delegate                   |
+| Mint cNFTs (tickets)| Event PDA            | Use event's Merkle Tree       | Store asset IDs in event account       |
+| Award/Transfer      | Event PDA            | Use event's Merkle Tree       | Transfer cNFTs from PDA to winners     |
+| Burn Unsold         | Event PDA            | Use event's Merkle Tree       | Burn cNFTs from PDA at auction close   |
+
 ### Phase 2: Randomness Integration
-- [ ] Integrate Switchboard VRF (add `switchboard-on-demand` to Rust/JS)
-- [ ] Implement Randomness account and winner selection logic
-- [ ] Add commit/reveal or anti-sybil logic as needed
-- [ ] Expose randomness-based instructions (e.g., draw winner)
-- [ ] Write TypeScript client code for VRF flows
+- [ ] Integrate Switchboard VRF (add `switchboard-on-demand`)
+- [ ] Randomness-Driven Auction End:
+    - At each price update (or at specified intervals), the program can request randomness from Switchboard VRF to decide whether to end the auction early.
+    - The randomness account and slot are stored in the Event account for traceability.
+    - When randomness is revealed, the program uses the value (e.g., random % 2 == 0) to determine if the auction should end.
+    - This mechanism can be used to introduce unpredictability or to break ties in a fair, verifiable way.
+- [ ] Random Winner Selection (if tickets > valid bids):
+    - If the number of tickets exceeds the number of valid bids above the closing price, the program requests randomness from Switchboard VRF to select winners from the eligible bidders.
+    - The randomness result is used to shuffle or select N winners from the list of eligible bids, ensuring a fair and transparent selection process.
+    - The randomness account and slot are stored in the Event account for auditability.
+- [ ] Handlers and Accounts:
+    - New instructions will be added for requesting and settling randomness for both auction end and winner selection.
+    - The Event account will be updated to track the randomness account and slot for each randomness request.
+    - A new AuctionRandomness account may be introduced to store randomness request metadata and results.
 
-### Phase 3: Advanced Features
-- [ ] Multi-winner support, event finalization, edge-case handling
-- [ ] Permissioning, admin controls, and event cancellation
-- [ ] Additional features as identified in Ticketfair docs
+#### Summary Table (Randomness Integration)
 
-### Phase 4: Testing & Simulation
-- [ ] Write unit tests for all instructions and account logic
-- [ ] Write integration tests for full event/ticket lifecycle
-- [ ] Simulate randomness flows using Switchboard devnet
-- [ ] Document test cases and expected outcomes
+| Use Case                | When Triggered                | Randomness Source         | Outcome/Action                                 |
+|-------------------------|-------------------------------|--------------------------|------------------------------------------------|
+| Auction End Decision    | On price update/interval      | Switchboard VRF          | May end auction early based on random value    |
+| Winner Selection        | At auction close (if needed)  | Switchboard VRF          | Selects N winners from eligible bids           |
 
-### Phase 5: Documentation & Examples
-- [ ] Update architecture and workflow docs as features are built
-- [ ] Add code comments and usage examples
-- [ ] Maintain this plan as a living document
-
----
-
-## Detailed TODOs (by Phase)
-
-- **Foundation:**
-  - [ ] Review and refactor escrow logic for Ticketfair
-  - [ ] Define Event, Ticket, User, Escrow account schemas
-  - [ ] Implement create_event, buy_ticket, claim_refund instructions
-  - [ ] Map out account interactions ([Accounts Interactions](../Ticketfair%20-%20Accounts%20Interactions.md))
-- **Randomness Integration:**
-  - [ ] Integrate Switchboard VRF per [tutorial](https://docs.switchboard.xyz/product-documentation/randomness/tutorials/solana-svm)
-  - [ ] Implement randomness account and winner selection
-  - [ ] Add commit/reveal or anti-sybil logic if required
-  - [ ] Expose draw_winner instruction
-  - [ ] Write TypeScript client for VRF
-- **Advanced Features:**
-  - [ ] Multi-winner, event finalization, admin controls
-  - [ ] Edge-case and error handling
-- **Testing & Simulation:**
-  - [ ] Unit tests for each instruction
-  - [ ] Integration tests for event/ticket lifecycle
-  - [ ] Simulate VRF flows on devnet
-  - [ ] Document all test cases
-- **Documentation:**
-  - [ ] Update all relevant docs as features are built
-  - [ ] Add code comments and usage examples
-
----
-
-## Testing Plan
-
-- **Unit Tests:**
-  - Each instruction (create_event, buy_ticket, claim_refund, draw_winner, etc.)
-  - Account initialization and validation
-  - Error and edge-case handling
-- **Integration Tests:**
-  - Full event lifecycle: event creation → ticket sales → winner draw → payout/refund
-  - Randomness integration: simulate VRF requests and responses
-  - Permissioning and admin flows
-- **Simulation:**
-  - Use Switchboard devnet for VRF testing
-  - Document expected outcomes for all randomness-based flows
-- **Test Documentation:**
-  - Maintain a list of test cases and outcomes in `/tests/` or `/docs/`
-  - Reference test plans in this document
-
----
-
-## Implementation Notes
-- Follow Anchor best practices for Solana program development
-- Use Switchboard's example code for VRF integration ([see tutorial](https://docs.switchboard.xyz/product-documentation/randomness/tutorials/solana-svm))
-- Ensure all new instructions are covered by tests
-- Reference Ticketfair docs for requirements and flows
-
----
-
-## Contributors
-- Please add notes, questions, and progress updates to this document as you work. 
+### Phase 6: Optimizations (Future)
+- Implement robust asset ID tracking for Bubblegum cNFTs:
+    - After event creation, parse transaction logs off-chain to extract cNFT asset IDs.
+    - Add an on-chain instruction (e.g., `set_asset_ids`) to update the event account with real asset IDs.
+    - Optionally, explore on-chain derivation of asset IDs if Bubblegum v2 supports it in the future.
+- This phase is deferred for future optimization to keep Phase 1 scope focused.

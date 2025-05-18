@@ -2,6 +2,7 @@
 
 use anchor_lang::prelude::*;
 use crate::state::{Bid, Event, Ticket};
+use mpl_bubblegum::instruction as bubblegum_instruction;
 
 #[derive(Accounts)]
 pub struct PlaceBidAccountConstraints<'info> {
@@ -95,11 +96,23 @@ pub struct AwardTicketAccountConstraints<'info> {
         bump
     )]
     pub ticket: Account<'info, Ticket>,
+    /// Bubblegum Merkle Tree for cNFTs
+    #[account(mut)]
+    pub merkle_tree: UncheckedAccount<'info>,
+    /// Bubblegum program
+    pub bubblegum_program: UncheckedAccount<'info>,
+    /// Log wrapper program (required by Bubblegum)
+    pub log_wrapper: UncheckedAccount<'info>,
+    /// Compression program (required by Bubblegum)
+    pub compression_program: UncheckedAccount<'info>,
+    /// Noop program (required by Bubblegum)
+    pub noop_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn award_ticket(
     context: Context<AwardTicketAccountConstraints>,
+    cnft_asset_id: Pubkey, // Asset ID to transfer
 ) -> Result<()> {
     let event = &mut context.accounts.event;
     let bid = &mut context.accounts.bid;
@@ -120,6 +133,32 @@ pub fn award_ticket(
         return Err(error!(crate::error::ErrorCode::CustomError)); // Replace with TicketsSoldOut if desired
     }
 
+    // Bubblegum CPI: Transfer cNFT from event PDA to winner
+    let transfer_ix = bubblegum_instruction::transfer_v2(
+        context.accounts.bubblegum_program.key(),
+        context.accounts.merkle_tree.key(),
+        event.key(), // event PDA as current owner
+        bid.bidder,  // new owner (winner)
+        cnft_asset_id,
+        event.key(), // event PDA as authority
+        None, // leaf delegate (optional)
+        None, // collection (optional)
+    );
+    let event_pda_seeds: &[&[u8]] = &[b"event", event.organizer.as_ref(), &[event.bump]];
+    anchor_lang::solana_program::program::invoke_signed(
+        &transfer_ix,
+        &[
+            context.accounts.bubblegum_program.to_account_info(),
+            context.accounts.merkle_tree.to_account_info(),
+            event.to_account_info(),
+            context.accounts.log_wrapper.to_account_info(),
+            context.accounts.compression_program.to_account_info(),
+            context.accounts.noop_program.to_account_info(),
+            context.accounts.system_program.to_account_info(),
+        ],
+        &[event_pda_seeds],
+    ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+
     // Mark bid as awarded
     bid.status = 1;
     event.tickets_awarded = event.tickets_awarded.checked_add(1).ok_or(error!(crate::error::ErrorCode::CustomError))?;
@@ -130,22 +169,7 @@ pub fn award_ticket(
     ticket.status = 0; // Owned
     ticket.offchain_ref = String::new(); // To be set by user later
     ticket.bump = context.bumps.ticket;
-
-    // Transfer funds from event PDA to organizer
-    let event_pda_seeds: &[&[u8]] = &[b"event", event.organizer.as_ref(), &[event.bump]];
-    let event_pda = context.accounts.event.to_account_info();
-    let organizer_account = organizer.to_account_info();
-    let system_program = context.accounts.system_program.to_account_info();
-    let ix = anchor_lang::solana_program::system_instruction::transfer(
-        &event_pda.key(),
-        &organizer.key(),
-        bid.amount,
-    );
-    anchor_lang::solana_program::program::invoke_signed(
-        &ix,
-        &[event_pda.clone(), organizer_account, system_program],
-        &[event_pda_seeds],
-    ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+    ticket.cnft_asset_id = cnft_asset_id;
 
     Ok(())
 }
@@ -155,13 +179,64 @@ pub struct RefundBidAccountConstraints<'info> {
     #[account(mut)]
     pub bidder: Signer<'info>,
     #[account(mut)]
+    pub event: Account<'info, Event>,
+    #[account(mut)]
     pub bid: Account<'info, Bid>,
+    /// Event PDA (escrow authority)
+    #[account(mut, seeds = [b"event", event.organizer.as_ref()], bump = event.bump)]
+    pub event_pda: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn refund_bid(
     context: Context<RefundBidAccountConstraints>,
 ) -> Result<()> {
-    // TODO: Implement bid refund logic
+    let event = &mut context.accounts.event;
+    let bid = &mut context.accounts.bid;
+    let bidder = &context.accounts.bidder;
+    let event_pda = &context.accounts.event_pda;
+
+    // Only allow refund if not already refunded
+    if bid.status == 2 {
+        return Err(error!(crate::error::ErrorCode::CustomError)); // Already refunded
+    }
+
+    let mut refund_amount = 0u64;
+    if bid.status == 0 {
+        // Case 1: Bid did not win, full refund
+        refund_amount = bid.amount;
+        bid.status = 2; // Refunded
+    } else if bid.status == 1 {
+        // Case 2: Bid won, partial refund if closing price < bid amount
+        let close_price = event.auction_close_price;
+        if bid.amount > close_price {
+            refund_amount = bid.amount - close_price;
+        } else {
+            // No refund needed
+            return Ok(());
+        }
+        // Do not mark as refunded, as the ticket is already awarded
+    } else {
+        return Err(error!(crate::error::ErrorCode::CustomError)); // Invalid bid status
+    }
+
+    if refund_amount > 0 {
+        let event_pda_seeds: &[&[u8]] = &[b"event", event.organizer.as_ref(), &[event.bump]];
+        let ix = anchor_lang::solana_program::system_instruction::transfer(
+            &event_pda.key(),
+            &bidder.key(),
+            refund_amount,
+        );
+        anchor_lang::solana_program::program::invoke_signed(
+            &ix,
+            &[
+                event_pda.to_account_info(),
+                bidder.to_account_info(),
+                context.accounts.system_program.to_account_info(),
+            ],
+            &[event_pda_seeds],
+        ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+    }
+
     Ok(())
 } 

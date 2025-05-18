@@ -75,8 +75,17 @@
 
 ---
 
-**Next Step Suggestion:**
-You can now proceed to design new account structs and instruction handlers for Ticketfair, leveraging the modular structure and shared utilities already present in the escrow program. 
+## Progress & Next Steps
+
+- Dutch auction modules, state, and handlers are scaffolded and partially implemented.
+- Bubblegum v2 integration is planned, documented, and helpers for PDA derivation and authority checks are implemented.
+- Event, Bid, and Ticket accounts are updated for cNFT asset tracking and Merkle Tree management.
+- Documentation is up-to-date for advisor review.
+- **Next Steps:**
+  - Complete Bubblegum CPI minting loop and asset ID tracking in event creation handler.
+  - Implement/refine refund logic and finalize all handler flows.
+  - Begin writing and running unit/integration tests.
+  - Continue updating documentation as implementation progresses.
 
 ### Updated Bubblegum v2 Integration for Ticketing
 - At event creation, mint the full supply of cNFTs (tickets) using Bubblegum v2 to a PDA holding authority.
@@ -84,4 +93,14 @@ You can now proceed to design new account structs and instruction handlers for T
 - Awarding tickets transfers cNFTs from the PDA to winners.
 - Unsold cNFTs are burned at auction close.
 - PDA authority and Merkle Tree management will be planned and reviewed with advisors.
+- Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
+
+### PDA Authority and Merkle Tree Management for Bubblegum v2
+- The event PDA (derived from [b"event", organizer_pubkey]) is the authority for minting, holding, transferring, and burning cNFTs.
+- Each event uses its own Merkle Tree for supply enforcement.
+- The event PDA is set as the tree delegate/authority.
+- At event creation, the event PDA mints the full supply of cNFTs to itself, storing asset IDs in the event account.
+- Awarding tickets transfers cNFTs from the PDA to winners.
+- Unsold cNFTs are burned at auction close.
+- This ensures on-chain, verifiable ticket supply and secure authority management.
 - Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2) 
