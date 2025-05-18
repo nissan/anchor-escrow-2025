@@ -90,3 +90,7 @@ Using different versions may cause compatibility issues.
 ## Changelog and Credits
 
 See the [CHANGELOG](CHANGELOG.md) for updates and contributor credits.
+
+## Planning: Solana Program & Switchboard VRF Integration
+
+See [`/docs/plan-switchboard-vrf.md`](docs/plan-switchboard-vrf.md) for the current plan, TODOs, and integration notes for building out the Solana programs and integrating Switchboard VRF features following [Switchboard's Solana SVM tutorial](https://docs.switchboard.xyz/product-documentation/randomness/tutorials/solana-svm).
