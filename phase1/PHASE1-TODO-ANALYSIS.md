@@ -77,3 +77,11 @@
 
 **Next Step Suggestion:**
 You can now proceed to design new account structs and instruction handlers for Ticketfair, leveraging the modular structure and shared utilities already present in the escrow program. 
+
+### Updated Bubblegum v2 Integration for Ticketing
+- At event creation, mint the full supply of cNFTs (tickets) using Bubblegum v2 to a PDA holding authority.
+- Event account stores Merkle Tree and cNFT asset IDs for on-chain supply enforcement.
+- Awarding tickets transfers cNFTs from the PDA to winners.
+- Unsold cNFTs are burned at auction close.
+- PDA authority and Merkle Tree management will be planned and reviewed with advisors.
+- Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2) 

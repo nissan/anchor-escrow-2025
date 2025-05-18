@@ -1,9 +1,11 @@
-# Phase 1: Foundation — Deep Dive & Execution Plan
+# Phase 1: Foundation — Deep Dive & Execution Plan (Dutch Auction Model)
 
 ## 1. Project Vision & Requirements (from LOI & User Stories)
-- **Goal:** Build a decentralized, fair, and transparent ticketing system on Solana.
+- **Goal:** Build a decentralized, fair, and transparent ticketing system on Solana using a Dutch auction for ticket sales.
 - **Key Requirements:**
-  - Users can create events, buy tickets, and claim refunds.
+  - Users can place bids (escrow funds) for tickets at the current auction price.
+  - Organizers can award tickets to the highest (or earliest valid) bidders.
+  - Refunds are processed for any overbid amount or for losing bids.
   - All actions are on-chain, with clear account structures.
   - Escrow logic ensures funds are held and released fairly.
   - System is ready for future randomness integration (Switchboard VRF).
@@ -11,42 +13,42 @@
 
 ## 2. Core Accounts & Data Structures
 - **Accounts to Implement:**
-  - **Event:** Stores event metadata, ticket supply, pricing, status.
-  - **Ticket:** Represents ownership, status (sold, claimed, refunded). In future phases, detailed ticket data will be stored off-chain in Walrus blobs, with only a reference (URL or blob ID) stored on-chain.
+  - **Event:** Stores event metadata, auction parameters, ticket supply, pricing, status.
+  - **Bid:** Represents a user's bid, amount, status (pending, awarded, refunded).
+  - **Ticket:** Represents ownership, status (awarded, claimed, refunded), off-chain reference.
   - **User:** (Optional) Tracks user activity, purchases.
-  - **Escrow:** Holds SOL for ticket sales, manages payouts/refunds.
-- **Reference:** See "Accounts Interactions" and "Program Structure" docs for diagrams and field lists.
+  - **Escrow:** Holds SOL for bids, manages payouts/refunds.
+- **Reference:** See TODO-ANALYSIS for reusable patterns and new logic needs.
 
 ## 3. Instruction Set
 - **Instructions to Implement:**
-  - `create_event`: Organizer creates a new event.
-  - `buy_ticket`: User purchases a ticket, funds go to escrow.
-  - `claim_refund`: User claims refund if event is canceled or not held.
-  - (Optional for Phase 1) `finalize_event`: Organizer finalizes event, releases funds.
-- **Reference:** "Simple Workflow" and "User Interaction" docs for flows.
+  - `place_bid`: User places a bid at the current auction price (escrow funds).
+  - `award_ticket`: Organizer awards a ticket to a valid bid, transferring funds and issuing a ticket.
+  - `refund_bid`: Refunds any overbid amount or full bid for losing bids.
+- **Reference:** See TODO-ANALYSIS for handler structure and account constraints.
 
 ## 4. Account Interactions & Workflow
 - **Flow:**
-  1. Organizer creates event (Event + Escrow accounts initialized).
-  2. Users buy tickets (Ticket accounts created, SOL sent to Escrow).
-  3. If event is canceled, users claim refunds.
-  4. If event is held, funds released to organizer.
-- **Reference:** "Accounts Interactions" and "Simple Workflow" docs.
+  1. Organizer creates event (Event + Escrow accounts initialized, auction parameters set).
+  2. Users place bids (Bid accounts created, SOL sent to Escrow).
+  3. Organizer awards tickets (Ticket accounts created, funds transferred, overbids refunded).
+  4. Losing bids are refunded in full.
+- **Reference:** See TODO-ANALYSIS for modular handler and state patterns.
 
 ## 5. External Integrations
 - **For Phase 1:** No external integrations required, but design with future Switchboard VRF integration in mind (see "External Integrations" doc).
 - **Future Integration:** Plan to use [Walrus storage](https://docs.wal.app/usage/web-api.html) for off-chain ticketing data, accessed via aggregator and publisher API endpoints. Only references (URLs/blob IDs) will be stored on-chain to minimize storage costs and maximize scalability. This is out of scope for Phase 1 but should be considered in account and instruction design.
 
 ## 6. Development Steps
-- [ ] **Audit & Refactor Escrow Contract:** Ensure it matches Ticketfair requirements.
-- [ ] **Define Account Schemas:** Use Anchor's `#[account]` macros for Event, Ticket, Escrow. Design schemas to allow for off-chain data references in future phases.
-- [ ] **Implement Instructions:** Write handlers for `create_event`, `buy_ticket`, `claim_refund`.
+- [ ] **Audit & Refactor Escrow Contract:** Ensure it matches Dutch auction requirements.
+- [ ] **Define Account Schemas:** Use Anchor's `#[account]` macros for Event, Bid, Ticket, Escrow. Design schemas to allow for off-chain data references in future phases.
+- [ ] **Implement Instructions:** Write handlers for `place_bid`, `award_ticket`, `refund_bid`.
 - [ ] **Document Account Structures:** Inline Rust docs and update architecture diagrams.
 - [ ] **Anchor Tests:** Write unit and integration tests for all instructions and account flows.
 
 ## 7. Testing Plan
-- **Unit Tests:** For each instruction, test success and failure cases (e.g., double purchase, refund edge cases).
-- **Integration Tests:** Simulate full event lifecycle (create, buy, refund, finalize).
+- **Unit Tests:** For each instruction, test success and failure cases (e.g., overbid, double award, refund edge cases).
+- **Integration Tests:** Simulate full auction lifecycle (create, bid, award, refund).
 - **Devnet Readiness:** Scripts to deploy and test on Solana devnet.
 
 ## 8. Documentation
@@ -54,11 +56,18 @@
 - Update architecture diagrams and workflow docs as you build.
 - **Reference:** [Walrus Storage API Documentation](https://docs.wal.app/usage/web-api.html) for future off-chain data plans.
 
+### Ticket Minting with Metaplex Bubblegum v2
+- At event creation, mint the full supply of cNFTs (tickets) using Bubblegum v2.
+- The event account stores the Merkle Tree address and cNFT asset IDs.
+- Awarding tickets transfers cNFTs to winners using Bubblegum's `transferV2`.
+- Unsold cNFTs are burned at auction close using `burnV2`.
+- Reference: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
+
 ---
 
 ## Next Steps
 
-1. **Refactor and implement the escrow contract and core accounts.**
+1. **Refactor and implement the escrow contract and core accounts for Dutch auction.**
 2. **Write and run Anchor tests for all instructions.**
 3. **Document everything in code and update diagrams.**
 4. **Prepare scripts for devnet deployment and testing.** 

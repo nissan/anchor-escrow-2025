@@ -24,6 +24,15 @@
 - [ ] Implement basic instructions: create event, buy ticket, claim refund
 - [ ] Document account structures and interactions
 
+### Dutch Auction Ticketing with Metaplex Bubblegum v2 (Updated)
+- At event creation, a Bubblegum Merkle Tree is created (if needed) and the full supply of compressed NFTs (cNFTs) representing tickets is minted using Bubblegum v2's `mintV2` instruction, with the event PDA as the holding authority.
+- The event account stores the Merkle Tree address and cNFT asset IDs for tracking and on-chain supply enforcement.
+- During the auction, users place bids and escrow funds as before.
+- When awarding tickets, cNFTs are transferred from the PDA to winners using Bubblegum's `transferV2` instruction.
+- At auction close, any unsold cNFTs are burned using `burnV2`, enforcing the edition's rarity and supply cap.
+- PDA authority and Merkle Tree management will be planned and reviewed with advisors.
+- See: [Bubblegum v2 Docs](https://developers.metaplex.com/bubblegum-v2)
+
 ### Phase 2: Randomness Integration
 - [ ] Integrate Switchboard VRF (add `switchboard-on-demand` to Rust/JS)
 - [ ] Implement Randomness account and winner selection logic
