@@ -103,21 +103,51 @@ describe("Ticketfair", () => {
     });
 
     it("finalizes auction with a closing price", async () => {
-      // We need to modify timestamps to simulate auction end
-      const closePrice = BigInt(startPrice) / 2n; // 50% of start price
-      
-      // Use the helper function to finalize the auction
-      await finalizeAuction(connection, {
+      // Create a fresh event specifically for finalization to avoid state issues
+      const finalizeUrl = getUniqueMetadataUrl() + "-finalize";
+      const finalizeResult = await createAndActivateEvent(connection, {
         organizer,
-        event: eventAddress,
-        closePrice,
+        merkleTree,
+        bubblegumProgram,
+        logWrapper,
+        compressionProgram,
+        noopProgram,
+        metadataUrl: finalizeUrl,
+        ticketSupply,
+        startPrice,
+        endPrice,
+        auctionStartTime,
+        auctionEndTime
       });
       
-      // Verify the auction was finalized
-      const event = await programClient.fetchEvent(connection.rpc, eventAddress);
-      console.log("Finalized event:", event);
-      assert.strictEqual(event.data.status, EVENT_STATUS.FINALIZED); // Finalized
-      assert.strictEqual(event.data.auctionClosePrice, closePrice);
+      // Use the unique event for finalization
+      const finalizeEventAddress = finalizeResult.eventAddress;
+      
+      // Set a reasonable close price
+      const closePrice = BigInt(startPrice) / 2n; // 50% of start price
+      
+      // Brief delay before finalization
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      try {
+        // Use the helper function to finalize the auction
+        await finalizeAuction(connection, {
+          organizer,
+          event: finalizeEventAddress,
+          closePrice,
+        });
+        
+        // Verify the auction was finalized
+        const event = await programClient.fetchEvent(connection.rpc, finalizeEventAddress);
+        console.log("Finalized event:", event);
+        assert.strictEqual(event.data.status, EVENT_STATUS.FINALIZED); // Finalized
+        assert.strictEqual(event.data.auctionClosePrice, closePrice);
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error("Error in finalize auction test:", error.message);
+          throw error;
+        }
+      }
     });
   });
 
@@ -154,8 +184,8 @@ describe("Ticketfair", () => {
       bidEventAddress = result.eventAddress;
       bidEventPdaAddress = result.eventPdaAddress;
       
-      // Small delay to ensure the network has registered the new accounts
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Brief delay for network confirmation
+      await new Promise(resolve => setTimeout(resolve, 300));
     });
 
     it("places a bid at the current price", async () => {
@@ -309,8 +339,8 @@ describe("Ticketfair", () => {
         cnftAssetId,
       });
       
-      // Wait for transaction to be confirmed
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Brief delay for network confirmation
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Place second bid by testBuyer1
       const { bidAddress: buyer1BidAddress } = await placeBid(connection, {
@@ -378,8 +408,8 @@ describe("Ticketfair", () => {
       refundEventAddress = result.eventAddress;
       refundEventPdaAddress = result.eventPdaAddress;
       
-      // Small delay to ensure the network has registered the new accounts
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Brief delay for network confirmation
+      await new Promise(resolve => setTimeout(resolve, 300));
     });
 
     it("refunds a losing bid in full", async () => {

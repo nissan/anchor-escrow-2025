@@ -102,8 +102,8 @@ export async function createAndActivateEvent(
     instructions: [activateEventIx],
   });
 
-  // Wait for a moment to make sure the event is activated
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Minimal wait for transaction confirmation
+  await new Promise(resolve => setTimeout(resolve, 500));
 
   return { eventAddress, eventPdaAddress };
 }
@@ -152,8 +152,8 @@ export async function placeBid(
     instructions: [placeBidIx],
   });
 
-  // Wait for the transaction to be processed
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Minimal wait for transaction confirmation
+  await new Promise(resolve => setTimeout(resolve, 400));
 
   return { bidAddress, tx };
 }
@@ -204,8 +204,8 @@ export async function awardTicket(
     instructions: [awardTicketIx],
   });
 
-  // Wait for the transaction to be processed
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Minimal wait for transaction confirmation
+  await new Promise(resolve => setTimeout(resolve, 400));
 
   return { ticketAddress, tx };
 }
@@ -234,8 +234,8 @@ export async function refundBid(
     instructions: [refundBidIx],
   });
 
-  // Wait for the transaction to be processed
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Minimal wait for transaction confirmation
+  await new Promise(resolve => setTimeout(resolve, 400));
 
   return { tx };
 }
@@ -262,8 +262,8 @@ export async function finalizeAuction(
     instructions: [finalizeAuctionIx],
   });
 
-  // Wait for the transaction to be processed
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  // Minimal wait for transaction confirmation
+  await new Promise(resolve => setTimeout(resolve, 400));
 
   return { tx };
 }
