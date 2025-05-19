@@ -3,10 +3,13 @@
   "version": "2.0.0",
   "scripts": {
     "build": "anchor build",
-    "test": "anchor test",
+    "test": "RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test",
+    "test:escrow": "RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test -- -g \"escrow\"",
+    "test:ticketfair": "RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "show-versions": "bash show-versions.sh"
+    "show-versions": "bash show-versions.sh",
+    "generate-client": "npx tsx create-codama-client.ts"
   },
   "license": "MIT",
   "devDependencies": {

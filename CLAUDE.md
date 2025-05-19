@@ -210,3 +210,7 @@ This allows for conditional compilation of code that depends on external librari
    ```bash
    npx tsx create-codama-client.ts
    ```
+
+## Anchor Testing Notes
+
+- run `anchor build` to build the project and `anchor test` to run tests. We cannot run isolated test suites, we have to run `anchor test` and then parse the outputs for the results of the tests we are interested in debugging at any time.
