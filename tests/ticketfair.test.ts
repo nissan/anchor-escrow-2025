@@ -131,20 +131,51 @@ describe("Ticketfair", () => {
       
       try {
         // Use the helper function to finalize the auction
-        await finalizeAuction(connection, {
+        const { tx } = await finalizeAuction(connection, {
           organizer,
           event: finalizeEventAddress,
           closePrice,
         });
         
+        console.log("Finalization transaction:", tx);
+        
+        // Add a slightly longer delay after finalization to ensure the transaction is confirmed
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         // Verify the auction was finalized
         const event = await programClient.fetchEvent(connection.rpc, finalizeEventAddress);
-        console.log("Finalized event:", event);
-        assert.strictEqual(event.data.status, EVENT_STATUS.FINALIZED); // Finalized
-        assert.strictEqual(event.data.auctionClosePrice, closePrice);
+        console.log("Finalized event data:", JSON.stringify(event.data, null, 2));
+        
+        // If the event status is not FINALIZED, log more details about the event
+        if (event.data.status !== EVENT_STATUS.FINALIZED) {
+          console.log(`Error: Expected event status ${EVENT_STATUS.FINALIZED} but got ${event.data.status}`);
+          console.log("Current auction times:", {
+            now: Math.floor(Date.now() / 1000),
+            start: Number(event.data.auctionStartTime),
+            end: Number(event.data.auctionEndTime)
+          });
+        }
+        
+        assert.strictEqual(event.data.status, EVENT_STATUS.FINALIZED, "Event should be in FINALIZED state");
+        assert.strictEqual(event.data.auctionClosePrice, closePrice, "Event should have the correct close price");
       } catch (error) {
         if (error instanceof Error) {
           console.error("Error in finalize auction test:", error.message);
+          
+          // Try to fetch the event again to see its current state
+          try {
+            const event = await programClient.fetchEvent(connection.rpc, finalizeEventAddress);
+            console.log("Event state after error:", {
+              status: event.data.status,
+              closePrice: event.data.auctionClosePrice,
+              now: Math.floor(Date.now() / 1000),
+              start: Number(event.data.auctionStartTime),
+              end: Number(event.data.auctionEndTime)
+            });
+          } catch (fetchError) {
+            console.error("Could not fetch event after error:", fetchError.message);
+          }
+          
           throw error;
         }
       }
@@ -189,22 +220,59 @@ describe("Ticketfair", () => {
     });
 
     it("places a bid at the current price", async () => {
+      // Create a new event specifically for this test to avoid conflicts
+      const bidTestUrl = getUniqueMetadataUrl() + "-bidtest";
+      const bidTestResult = await createAndActivateEvent(connection, {
+        organizer,
+        merkleTree,
+        bubblegumProgram,
+        logWrapper,
+        compressionProgram,
+        noopProgram,
+        metadataUrl: bidTestUrl,
+        ticketSupply,
+        startPrice,
+        endPrice,
+        // Make sure auction is currently active
+        auctionStartTime: BigInt(Math.floor(Date.now() / 1000) - 10), // 10 seconds ago
+        auctionEndTime: BigInt(Math.floor(Date.now() / 1000) + 3600), // 1 hour from now
+      });
+      
+      const bidTestEventAddress = bidTestResult.eventAddress;
+      
+      // Brief delay to ensure the event is registered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Get the current auction price
-      const event = await programClient.fetchEvent(connection.rpc, bidEventAddress);
+      const event = await programClient.fetchEvent(connection.rpc, bidTestEventAddress);
       const currentPrice = calculateCurrentPrice(event);
       
       console.log(`Current auction price: ${currentPrice} lamports`);
+      console.log("Auction status:", event.data.status);
+      console.log("Auction times:", {
+        now: Math.floor(Date.now() / 1000),
+        start: Number(event.data.auctionStartTime),
+        end: Number(event.data.auctionEndTime)
+      });
       
       try {
         // Place the bid using our helper function with the test-specific buyer
         const result = await placeBid(connection, {
           bidder: testBuyer1,
-          event: bidEventAddress,
+          event: bidTestEventAddress,
           amount: currentPrice,
         });
         
         buyerBidAddress = result.bidAddress;
         console.log(`Successfully placed bid of ${currentPrice} lamports, tx: ${result.tx}`);
+        
+        // Verify the bid was created by fetching it
+        console.log("Bid address:", buyerBidAddress);
+        // Let the transaction get confirmed
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Here we'd ideally verify the bid, but we need to add a fetchBid helper
+        // For now, we'll just consider the test passed if we get here without errors
       } catch (error) {
         if (error instanceof Error) {
           console.error("Error placing bid:", error.message);
@@ -216,8 +284,31 @@ describe("Ticketfair", () => {
     });
 
     it("rejects bids not at the current auction price", async () => {
+      // Create a new event specifically for this test to avoid conflicts
+      const incorrectBidUrl = getUniqueMetadataUrl() + "-incorrectbid";
+      const incorrectBidResult = await createAndActivateEvent(connection, {
+        organizer,
+        merkleTree,
+        bubblegumProgram,
+        logWrapper,
+        compressionProgram,
+        noopProgram,
+        metadataUrl: incorrectBidUrl,
+        ticketSupply,
+        startPrice,
+        endPrice,
+        // Make sure auction is currently active
+        auctionStartTime: BigInt(Math.floor(Date.now() / 1000) - 10), // 10 seconds ago
+        auctionEndTime: BigInt(Math.floor(Date.now() / 1000) + 3600), // 1 hour from now
+      });
+      
+      const incorrectBidEventAddress = incorrectBidResult.eventAddress;
+      
+      // Brief delay to ensure the event is registered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Get the current auction price from the event
-      const event = await programClient.fetchEvent(connection.rpc, bidEventAddress);
+      const event = await programClient.fetchEvent(connection.rpc, incorrectBidEventAddress);
       const currentPrice = calculateCurrentPrice(event);
       
       // Use an incorrect price (20% higher than the current price)
@@ -228,7 +319,7 @@ describe("Ticketfair", () => {
         // Place a bid with an incorrect price using test-specific buyer
         await placeBid(connection, {
           bidder: testBuyer2,
-          event: bidEventAddress,
+          event: incorrectBidEventAddress,
           amount: incorrectPrice,
         });
         
@@ -236,7 +327,15 @@ describe("Ticketfair", () => {
       } catch (error) {
         if (error instanceof Error) {
           // Expect a specific error for incorrect price
-          assert.ok(error.message.includes("BidNotAtCurrentPrice"), 
+          console.log("Got error:", error.message);
+          
+          // Check for any of the possible error messages related to incorrect price
+          const isExpectedError = 
+            error.message.includes("BidNotAtCurrentPrice") || 
+            error.message.includes("custom program error: 0x1774") ||
+            error.message.includes("6004");
+            
+          assert.ok(isExpectedError, 
             `Expected error about BidNotAtCurrentPrice but got: ${error.message}`);
           console.log("Correctly rejected bid with incorrect price");
         } else {
@@ -246,15 +345,43 @@ describe("Ticketfair", () => {
     });
 
     it("awards a ticket to a valid bid", async () => {
+      // Create a fresh event just for this test
+      const awardUrl = getUniqueMetadataUrl() + "-award";
+      const awardResult = await createAndActivateEvent(connection, {
+        organizer,
+        merkleTree,
+        bubblegumProgram,
+        logWrapper,
+        compressionProgram,
+        noopProgram,
+        metadataUrl: awardUrl,
+        ticketSupply,
+        startPrice,
+        endPrice,
+        // Make sure auction is currently active
+        auctionStartTime: BigInt(Math.floor(Date.now() / 1000) - 10), // 10 seconds ago
+        auctionEndTime: BigInt(Math.floor(Date.now() / 1000) + 3600), // 1 hour from now
+      });
+      
+      const awardEventAddress = awardResult.eventAddress;
+      
+      // Brief delay to ensure the event is registered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // First place a bid
-      const event = await programClient.fetchEvent(connection.rpc, bidEventAddress);
+      const event = await programClient.fetchEvent(connection.rpc, awardEventAddress);
       const currentPrice = calculateCurrentPrice(event);
+      
+      console.log("Placing bid for award test with price:", currentPrice);
       
       const bidResult = await placeBid(connection, {
         bidder: testBuyer1,
-        event: bidEventAddress,
+        event: awardEventAddress,
         amount: currentPrice,
       });
+      
+      // Brief delay to ensure the bid is registered
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Use a simulated cNFT asset ID (we're not actually minting cNFTs in test mode)
       const simulatedAssetId = Uint8Array.from(Array(32).fill(0));
@@ -265,7 +392,7 @@ describe("Ticketfair", () => {
         // Award the ticket using our helper function
         const { ticketAddress, tx } = await awardTicket(connection, {
           organizer,
-          event: bidEventAddress,
+          event: awardEventAddress,
           bid: bidResult.bidAddress,
           buyer: testBuyer1,
           merkleTree,
@@ -276,14 +403,36 @@ describe("Ticketfair", () => {
           cnftAssetId,
         });
         
+        // Wait for the transaction to be confirmed
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         console.log("Successfully awarded ticket, tx:", tx);
         
         // Check the event's tickets_awarded count increased
-        const updatedEvent = await programClient.fetchEvent(connection.rpc, bidEventAddress);
-        assert.strictEqual(updatedEvent.ticketsAwarded, 1, "Event should have awarded 1 ticket");
+        const updatedEvent = await programClient.fetchEvent(connection.rpc, awardEventAddress);
+        console.log("Event after award:", {
+          ticketsAwarded: updatedEvent.data.ticketsAwarded,
+          ticketSupply: updatedEvent.data.ticketSupply
+        });
+        
+        // Use loose equality to compare number with bigint if needed
+        const ticketsAwarded = Number(updatedEvent.data.ticketsAwarded);
+        assert.ok(ticketsAwarded === 1, `Event should have awarded 1 ticket but has ${ticketsAwarded}`);
       } catch (error) {
         if (error instanceof Error) {
           console.error("Error awarding ticket:", error.message);
+          
+          // Additional debugging - try to fetch the event state
+          try {
+            const eventState = await programClient.fetchEvent(connection.rpc, awardEventAddress);
+            console.log("Event state at error:", {
+              ticketsAwarded: eventState.data.ticketsAwarded,
+              status: eventState.data.status
+            });
+          } catch (fetchErr) {
+            console.error("Failed to fetch event state:", fetchErr.message);
+          }
+          
           assert.fail("Failed to award ticket: " + error.message);
         } else {
           throw error;
