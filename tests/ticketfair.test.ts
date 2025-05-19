@@ -54,9 +54,12 @@ describe("Ticketfair", () => {
   describe("Event Management", () => {
     let eventAddress: Address;
     let eventPdaAddress: Address;
+    
+    // Create a unique identifier for each test to avoid PDA collisions
+    const getUniqueMetadataUrl = () => `${metadataUrl}-management-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     it("creates a new event with valid parameters", async () => {
-      // Create and activate the event
+      // Create and activate the event with unique metadata URL
       const result = await createAndActivateEvent(connection, {
         organizer,
         merkleTree,
@@ -64,7 +67,7 @@ describe("Ticketfair", () => {
         logWrapper,
         compressionProgram,
         noopProgram,
-        metadataUrl,
+        metadataUrl: getUniqueMetadataUrl(),
         ticketSupply,
         startPrice,
         endPrice,
@@ -85,7 +88,8 @@ describe("Ticketfair", () => {
       
       // Access all fields from event.data
       assert.strictEqual(event.data.organizer, organizer.address);
-      assert.strictEqual(event.data.metadataUrl, metadataUrl);
+      // We're using a dynamic metadata URL, so we just check it's not empty
+      assert.ok(event.data.metadataUrl.startsWith(metadataUrl), "Metadata URL should start with the base URL");
       assert.strictEqual(event.data.ticketSupply, ticketSupply);
       assert.strictEqual(event.data.ticketsAwarded, 0);
       assert.strictEqual(event.data.startPrice, startPrice);
@@ -121,8 +125,16 @@ describe("Ticketfair", () => {
     let bidEventAddress: Address;
     let bidEventPdaAddress: Address;
     let buyerBidAddress: Address;
+    let testBuyer1: KeyPairSigner;
+    let testBuyer2: KeyPairSigner;
+    
+    // Create a unique identifier for each test to avoid PDA collisions
+    const getUniqueMetadataUrl = () => `${metadataUrl}-bidding-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     beforeEach(async () => {
+      // Create fresh wallets for each test to avoid PDA collisions
+      [testBuyer1, testBuyer2] = await connection.createWallets(2, { airdropAmount: ONE_SOL * 10n });
+      
       // Create and activate a fresh event for bidding tests
       const result = await createAndActivateEvent(connection, {
         organizer,
@@ -131,7 +143,7 @@ describe("Ticketfair", () => {
         logWrapper,
         compressionProgram,
         noopProgram,
-        metadataUrl: metadataUrl + Date.now(), // Make it unique
+        metadataUrl: getUniqueMetadataUrl(), // Make it truly unique for each test
         ticketSupply,
         startPrice,
         endPrice,
@@ -141,6 +153,9 @@ describe("Ticketfair", () => {
       
       bidEventAddress = result.eventAddress;
       bidEventPdaAddress = result.eventPdaAddress;
+      
+      // Small delay to ensure the network has registered the new accounts
+      await new Promise(resolve => setTimeout(resolve, 2000));
     });
 
     it("places a bid at the current price", async () => {
@@ -151,9 +166,9 @@ describe("Ticketfair", () => {
       console.log(`Current auction price: ${currentPrice} lamports`);
       
       try {
-        // Place the bid using our helper function
+        // Place the bid using our helper function with the test-specific buyer
         const result = await placeBid(connection, {
-          bidder: buyer1,
+          bidder: testBuyer1,
           event: bidEventAddress,
           amount: currentPrice,
         });
@@ -180,9 +195,9 @@ describe("Ticketfair", () => {
       console.log(`Current auction price: ${currentPrice} lamports, using incorrect price: ${incorrectPrice} lamports`);
       
       try {
-        // Place a bid with an incorrect price
+        // Place a bid with an incorrect price using test-specific buyer
         await placeBid(connection, {
-          bidder: buyer2,
+          bidder: testBuyer2,
           event: bidEventAddress,
           amount: incorrectPrice,
         });
@@ -206,7 +221,7 @@ describe("Ticketfair", () => {
       const currentPrice = calculateCurrentPrice(event);
       
       const bidResult = await placeBid(connection, {
-        bidder: buyer1,
+        bidder: testBuyer1,
         event: bidEventAddress,
         amount: currentPrice,
       });
@@ -222,7 +237,7 @@ describe("Ticketfair", () => {
           organizer,
           event: bidEventAddress,
           bid: bidResult.bidAddress,
-          buyer: buyer1,
+          buyer: testBuyer1,
           merkleTree,
           bubblegumProgram,
           logWrapper,
@@ -248,6 +263,7 @@ describe("Ticketfair", () => {
 
     it("fails to award a ticket if tickets are sold out", async () => {
       // Create event with only 1 ticket
+      const soldOutUrl = getUniqueMetadataUrl() + "-soldout";
       const { eventAddress: soldOutEventAddress, eventPdaAddress } = await createAndActivateEvent(connection, {
         organizer,
         merkleTree,
@@ -255,7 +271,7 @@ describe("Ticketfair", () => {
         logWrapper,
         compressionProgram,
         noopProgram,
-        metadataUrl: metadataUrl + Date.now(), // Make it unique
+        metadataUrl: soldOutUrl,
         ticketSupply: 1, // Only 1 ticket
         startPrice,
         endPrice,
@@ -267,9 +283,9 @@ describe("Ticketfair", () => {
       const event = await programClient.fetchEvent(connection.rpc, soldOutEventAddress);
       const currentPrice = calculateCurrentPrice(event);
       
-      // Place first bid by buyer2
+      // Place first bid by testBuyer2
       const { bidAddress: buyer2BidAddress } = await placeBid(connection, {
-        bidder: buyer2,
+        bidder: testBuyer2,
         event: soldOutEventAddress,
         amount: currentPrice,
       });
@@ -284,7 +300,7 @@ describe("Ticketfair", () => {
         organizer,
         event: soldOutEventAddress,
         bid: buyer2BidAddress,
-        buyer: buyer2,
+        buyer: testBuyer2,
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -293,9 +309,12 @@ describe("Ticketfair", () => {
         cnftAssetId,
       });
       
-      // Place second bid by buyer1
+      // Wait for transaction to be confirmed
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Place second bid by testBuyer1
       const { bidAddress: buyer1BidAddress } = await placeBid(connection, {
-        bidder: buyer1,
+        bidder: testBuyer1,
         event: soldOutEventAddress,
         amount: currentPrice,
       });
@@ -306,7 +325,7 @@ describe("Ticketfair", () => {
           organizer,
           event: soldOutEventAddress,
           bid: buyer1BidAddress,
-          buyer: buyer1,
+          buyer: testBuyer1,
           merkleTree,
           bubblegumProgram,
           logWrapper,
@@ -330,8 +349,16 @@ describe("Ticketfair", () => {
   describe("Refunds", () => {
     let refundEventAddress: Address;
     let refundEventPdaAddress: Address;
+    let refundBuyer1: KeyPairSigner;
+    let refundBuyer2: KeyPairSigner;
+    
+    // Create a unique identifier for each test to avoid PDA collisions
+    const getUniqueMetadataUrl = () => `${metadataUrl}-refund-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     
     beforeEach(async () => {
+      // Create fresh wallets for each test to avoid PDA collisions
+      [refundBuyer1, refundBuyer2] = await connection.createWallets(2, { airdropAmount: ONE_SOL * 10n });
+      
       // Create a fresh event for refund tests
       const result = await createAndActivateEvent(connection, {
         organizer,
@@ -340,7 +367,7 @@ describe("Ticketfair", () => {
         logWrapper,
         compressionProgram,
         noopProgram,
-        metadataUrl: metadataUrl + Date.now(), // Make unique
+        metadataUrl: getUniqueMetadataUrl(), // Make truly unique for each test
         ticketSupply,
         startPrice,
         endPrice,
@@ -350,6 +377,9 @@ describe("Ticketfair", () => {
       
       refundEventAddress = result.eventAddress;
       refundEventPdaAddress = result.eventPdaAddress;
+      
+      // Small delay to ensure the network has registered the new accounts
+      await new Promise(resolve => setTimeout(resolve, 2000));
     });
 
     it("refunds a losing bid in full", async () => {
@@ -357,12 +387,12 @@ describe("Ticketfair", () => {
       const event = await programClient.fetchEvent(connection.rpc, refundEventAddress);
       const currentPrice = calculateCurrentPrice(event);
       
-      // Get buyer1's balance before bidding
-      const balanceBefore = await connection.getBalance(buyer1.address);
+      // Get refundBuyer1's balance before bidding
+      const balanceBefore = await connection.getBalance(refundBuyer1.address);
       
       // Place the bid
       const { bidAddress: refundBidAddress, tx: bidTx } = await placeBid(connection, {
-        bidder: buyer1,
+        bidder: refundBuyer1,
         event: refundEventAddress,
         amount: currentPrice,
       });
@@ -370,12 +400,12 @@ describe("Ticketfair", () => {
       console.log(`Placed bid of ${currentPrice} lamports, transaction: ${bidTx}`);
       
       // Check the buyer's balance after bidding (should be lower by bid amount + fee)
-      const balanceAfterBid = await connection.getBalance(buyer1.address);
+      const balanceAfterBid = await connection.getBalance(refundBuyer1.address);
       console.log(`Balance before bid: ${balanceBefore}, after bid: ${balanceAfterBid}`);
       
       // Now refund the bid
       const { tx: refundTx } = await refundBid(connection, {
-        bidder: buyer1,
+        bidder: refundBuyer1,
         event: refundEventAddress,
         bid: refundBidAddress,
         eventPda: refundEventPdaAddress,
@@ -384,7 +414,7 @@ describe("Ticketfair", () => {
       console.log(`Refunded bid, transaction: ${refundTx}`);
       
       // Check the buyer's balance after refund (should be close to original, minus transaction fees)
-      const balanceAfterRefund = await connection.getBalance(buyer1.address);
+      const balanceAfterRefund = await connection.getBalance(refundBuyer1.address);
       console.log(`Balance after refund: ${balanceAfterRefund}`);
       
       // Assert that the buyer got a refund (accounting for transaction fees)
@@ -403,18 +433,18 @@ describe("Ticketfair", () => {
       const event = await programClient.fetchEvent(connection.rpc, refundEventAddress);
       const currentPrice = calculateCurrentPrice(event);
       
-      // Get buyer2's balance before bidding
-      const balanceBefore = await connection.getBalance(buyer2.address);
+      // Get refundBuyer2's balance before bidding
+      const balanceBefore = await connection.getBalance(refundBuyer2.address);
       
       // Place a bid at the start price
       const { bidAddress, tx: bidTx } = await placeBid(connection, {
-        bidder: buyer2,
+        bidder: refundBuyer2,
         event: refundEventAddress,
         amount: currentPrice,
       });
       
       // Check the buyer's balance after bidding
-      const balanceAfterBid = await connection.getBalance(buyer2.address);
+      const balanceAfterBid = await connection.getBalance(refundBuyer2.address);
       
       // Award a ticket
       const simulatedAssetId = Uint8Array.from(Array(32).fill(0));
@@ -425,7 +455,7 @@ describe("Ticketfair", () => {
         organizer,
         event: refundEventAddress,
         bid: bidAddress,
-        buyer: buyer2,
+        buyer: refundBuyer2,
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -449,14 +479,14 @@ describe("Ticketfair", () => {
       // Request refund for the difference
       try {
         const { tx: refundTx } = await refundBid(connection, {
-          bidder: buyer2,
+          bidder: refundBuyer2,
           event: refundEventAddress,
           bid: bidAddress,
           eventPda: refundEventPdaAddress,
         });
         
         // Check the buyer's balance after refund
-        const balanceAfterRefund = await connection.getBalance(buyer2.address);
+        const balanceAfterRefund = await connection.getBalance(refundBuyer2.address);
         
         // Calculate expected refund: bid amount - close price
         const expectedRefund = Number(currentPrice) - Number(closePrice);
@@ -484,14 +514,14 @@ describe("Ticketfair", () => {
       
       // Place a bid
       const { bidAddress: doubleRefundBidAddress } = await placeBid(connection, {
-        bidder: buyer1,
+        bidder: refundBuyer1,
         event: refundEventAddress,
         amount: currentPrice,
       });
       
       // First refund (should succeed)
       await refundBid(connection, {
-        bidder: buyer1,
+        bidder: refundBuyer1,
         event: refundEventAddress,
         bid: doubleRefundBidAddress,
         eventPda: refundEventPdaAddress,
@@ -502,7 +532,7 @@ describe("Ticketfair", () => {
       // Second refund attempt (should fail)
       try {
         await refundBid(connection, {
-          bidder: buyer1,
+          bidder: refundBuyer1,
           event: refundEventAddress,
           bid: doubleRefundBidAddress,
           eventPda: refundEventPdaAddress,
