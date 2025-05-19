@@ -10,6 +10,7 @@ use anchor_lang::prelude::Result;
 
 // Import program state
 use escrow::state;
+use escrow::constants::*;
 
 #[cfg(test)]
 mod tests {
@@ -58,7 +59,7 @@ mod tests {
             auction_start_time,
             auction_end_time,
             auction_close_price: 0,
-            status: 0,
+            status: EVENT_STATUS_CREATED,
             bump: 255,
             merkle_tree,
             cnft_asset_ids: vec![],
@@ -73,10 +74,35 @@ mod tests {
         assert_eq!(event.end_price, end_price);
         assert_eq!(event.auction_start_time, auction_start_time);
         assert_eq!(event.auction_end_time, auction_end_time);
-        assert_eq!(event.status, 0);
+        assert_eq!(event.status, EVENT_STATUS_CREATED);
         assert_eq!(event.merkle_tree, merkle_tree);
         // Asset IDs should be empty at creation
         assert!(event.cnft_asset_ids.is_empty());
+    }
+
+    #[test]
+    fn test_event_activation() {
+        // Simulate event account
+        let mut event = state::Event {
+            organizer: test_pubkey(1),
+            metadata_url: "https://example.com/event.json".to_string(),
+            ticket_supply: 10,
+            tickets_awarded: 0,
+            start_price: 1_000_000,
+            end_price: 100_000,
+            auction_start_time: test_time(),
+            auction_end_time: test_time() + 3600,
+            auction_close_price: 0,
+            status: EVENT_STATUS_CREATED,
+            bump: 255,
+            merkle_tree: test_pubkey(2),
+            cnft_asset_ids: vec![],
+        };
+
+        // Test activation
+        assert_eq!(event.status, EVENT_STATUS_CREATED);
+        event.status = EVENT_STATUS_ACTIVE;
+        assert_eq!(event.status, EVENT_STATUS_ACTIVE);
     }
 
     #[test]
@@ -89,14 +115,18 @@ mod tests {
             bidder,
             event,
             amount,
-            status: 0,
+            status: BID_STATUS_PENDING,
             bump: 254,
         };
         // Assert bid fields
         assert_eq!(bid.bidder, bidder);
         assert_eq!(bid.event, event);
         assert_eq!(bid.amount, amount);
-        assert_eq!(bid.status, 0); // Pending
+        assert_eq!(bid.status, BID_STATUS_PENDING);
+        
+        // Test helper method
+        assert!(bid.can_award());
+        assert!(bid.can_refund());
     }
 
     #[test]
@@ -108,7 +138,7 @@ mod tests {
         let mut ticket = state::Ticket {
             owner,
             event,
-            status: 0,
+            status: TICKET_STATUS_OWNED,
             offchain_ref: String::new(),
             bump: 253,
             cnft_asset_id,
@@ -116,8 +146,90 @@ mod tests {
         // Assert ticket fields
         assert_eq!(ticket.owner, owner);
         assert_eq!(ticket.event, event);
-        assert_eq!(ticket.status, 0); // Owned
+        assert_eq!(ticket.status, TICKET_STATUS_OWNED);
         assert_eq!(ticket.cnft_asset_id, cnft_asset_id);
+        
+        // Test helper methods
+        assert!(ticket.can_claim());
+        assert!(ticket.can_refund());
+    }
+
+    #[test]
+    fn test_finalize_auction() {
+        // Simulate event account
+        let mut event = state::Event {
+            organizer: test_pubkey(1),
+            metadata_url: "https://example.com/event.json".to_string(),
+            ticket_supply: 10,
+            tickets_awarded: 5, // Some tickets awarded
+            start_price: 1_000_000,
+            end_price: 100_000,
+            auction_start_time: test_time() - 7200, // 2 hours ago
+            auction_end_time: test_time() - 3600, // 1 hour ago (auction ended)
+            auction_close_price: 0, // Not finalized yet
+            status: EVENT_STATUS_ACTIVE,
+            bump: 255,
+            merkle_tree: test_pubkey(2),
+            cnft_asset_ids: vec![],
+        };
+        
+        // Test finalization condition
+        assert!(event.can_finalize(test_time())); // Should be finalizable now
+        
+        // Finalize auction
+        let close_price = 500_000; // Between start and end price
+        event.auction_close_price = close_price;
+        event.status = EVENT_STATUS_FINALIZED;
+        
+        // Verify the auction is finalized
+        assert_eq!(event.auction_close_price, close_price);
+        assert_eq!(event.status, EVENT_STATUS_FINALIZED);
+        assert!(!event.can_finalize(test_time())); // Cannot finalize again
+    }
+
+    #[test]
+    fn test_dutch_auction_pricing() {
+        // Create an event with a 1-hour auction
+        let start_time = test_time();
+        let end_time = start_time + 3600; // 1 hour duration
+        let start_price = 1_000_000;
+        let end_price = 100_000;
+        
+        let event = state::Event {
+            organizer: test_pubkey(1),
+            metadata_url: "https://example.com/event.json".to_string(),
+            ticket_supply: 10,
+            tickets_awarded: 0,
+            start_price,
+            end_price,
+            auction_start_time: start_time,
+            auction_end_time: end_time,
+            auction_close_price: 0,
+            status: EVENT_STATUS_ACTIVE,
+            bump: 255,
+            merkle_tree: test_pubkey(2),
+            cnft_asset_ids: vec![],
+        };
+        
+        // Test pricing at different times
+        assert_eq!(event.get_current_auction_price(start_time - 1), start_price); // Before auction
+        assert_eq!(event.get_current_auction_price(start_time), start_price); // At auction start
+        assert_eq!(event.get_current_auction_price(end_time), end_price); // At auction end
+        assert_eq!(event.get_current_auction_price(end_time + 1), end_price); // After auction
+        
+        // Test pricing at halfway point
+        let halfway_time = start_time + 1800; // 30 minutes in
+        let expected_halfway_price = 550_000; // Half between start and end price
+        assert_eq!(event.get_current_auction_price(halfway_time), expected_halfway_price);
+        
+        // Test pricing at quarter points
+        let quarter_time = start_time + 900; // 15 minutes in
+        let expected_quarter_price = 775_000; // 1/4 between start and end price
+        assert_eq!(event.get_current_auction_price(quarter_time), expected_quarter_price);
+        
+        let three_quarter_time = start_time + 2700; // 45 minutes in
+        let expected_three_quarter_price = 325_000; // 3/4 between start and end price
+        assert_eq!(event.get_current_auction_price(three_quarter_time), expected_three_quarter_price);
     }
 
     #[test]
@@ -127,28 +239,47 @@ mod tests {
             bidder: test_pubkey(8),
             event: test_pubkey(9),
             amount: 2_000_000,
-            status: 0, // Pending
+            status: BID_STATUS_PENDING, // Pending
             bump: 252,
         };
         // Refund logic: losing bid
-        bid.status = 2; // Refunded
-        assert_eq!(bid.status, 2);
+        bid.status = BID_STATUS_REFUNDED; // Refunded
+        assert_eq!(bid.status, BID_STATUS_REFUNDED);
+        assert!(!bid.can_refund()); // Can't refund again
+        
+        // Create event to simulate a finalized auction
+        let mut event = state::Event {
+            organizer: test_pubkey(10),
+            metadata_url: "https://example.com/event2.json".to_string(),
+            ticket_supply: 10,
+            tickets_awarded: 5,
+            start_price: 2_000_000,
+            end_price: 1_000_000,
+            auction_start_time: test_time() - 7200,
+            auction_end_time: test_time() - 3600,
+            auction_close_price: 1_500_000, // Auction finalized with this price
+            status: EVENT_STATUS_FINALIZED,
+            bump: 251,
+            merkle_tree: test_pubkey(11),
+            cnft_asset_ids: vec![],
+        };
 
         // Simulate a partial refund for a winning bid (overbid)
-        let mut bid2 = state::Bid {
-            bidder: test_pubkey(10),
-            event: test_pubkey(11),
-            amount: 2_000_000,
-            status: 1, // Awarded
-            bump: 251,
+        let mut awarded_bid = state::Bid {
+            bidder: test_pubkey(12),
+            event: event.merkle_tree,
+            amount: 2_000_000, // Bid was at this higher amount
+            status: BID_STATUS_AWARDED, // Awarded
+            bump: 250,
         };
-        let auction_close_price = 1_500_000u64;
-        let refund_amount = if bid2.amount > auction_close_price {
-            bid2.amount - auction_close_price
+        
+        // Calculate expected refund amount
+        let refund_amount = if awarded_bid.amount > event.auction_close_price {
+            awarded_bid.amount - event.auction_close_price
         } else {
             0
         };
-        assert_eq!(refund_amount, 500_000);
+        assert_eq!(refund_amount, 500_000); // Should get a partial refund of 0.5 SOL
     }
 
     #[test]
@@ -164,7 +295,7 @@ mod tests {
             auction_start_time: test_time(),
             auction_end_time: test_time() + 3600,
             auction_close_price: 0,
-            status: 0,
+            status: EVENT_STATUS_CREATED,
             bump: 250,
             merkle_tree: test_pubkey(13),
             cnft_asset_ids: vec![],
@@ -179,7 +310,7 @@ mod tests {
         let mut ticket = state::Ticket {
             owner: test_pubkey(16),
             event: event.merkle_tree,
-            status: 0,
+            status: TICKET_STATUS_OWNED,
             offchain_ref: String::new(),
             bump: 249,
             cnft_asset_id: asset_id1,
@@ -188,4 +319,4 @@ mod tests {
         event.cnft_asset_ids.retain(|&id| id != asset_id2);
         assert_eq!(event.cnft_asset_ids.len(), 1);
     }
-} 
+}

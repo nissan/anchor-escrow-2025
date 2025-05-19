@@ -38,6 +38,9 @@ RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test
 # Run specific test file
 RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test -- -g "ticketfair_auction"
 
+# Run TypeScript tests
+RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test -- -g "ticketfair"
+
 # Lint code
 npm run lint
 
@@ -55,6 +58,20 @@ anchor deploy
 ## Project Overview: TicketFair Platform
 
 This repository is evolving from a basic Escrow program to the TicketFair platform - a decentralized event ticketing system using Dutch auctions and compressed NFTs on Solana.
+
+### Phased Development Approach
+
+This project follows a phased approach with clear milestones:
+
+1. **Phase 1 (Current)**: Foundation - Core account structures and auction logic
+2. **Phase 2**: Switchboard VRF integration for randomness features
+3. **Future Phases**: Optimizations and advanced features
+
+Each phase has its own documentation in the `/phaseN/` directories, with the following key files:
+- `PHASEN.md` - Overview of the phase
+- `PHASEN-PLAN.md` - Detailed plan and requirements
+- `PHASEN-STATUS.md` - Current implementation status
+- `PHASEN-TESTING.md` - Testing criteria and approach
 
 ### Dependency Management Notes
 
@@ -77,6 +94,18 @@ Try one of these solutions:
    ```
 
 3. For development and testing, you can temporarily comment out problematic dependencies like `mpl-bubblegum` and their related code until you're ready to integrate them fully.
+
+### Feature Flags
+
+The codebase uses Rust feature flags to manage integration with external dependencies like Bubblegum. In `programs/escrow/Cargo.toml`:
+
+```toml
+[features]
+default = []
+bubblegum = [] # Feature flag for Bubblegum integration
+```
+
+This allows for conditional compilation of code that depends on external libraries, enabling phased development and testing of core functionality without needing all integrations to be complete.
 
 ### Core Components
 
@@ -110,6 +139,7 @@ Try one of these solutions:
 
 1. **Event Management**:
    - **create_event** - Creates a new event with Dutch auction parameters
+   - **activate_event** - Changes event status from Created to Active
    - Mints compressed NFTs to an event PDA using Bubblegum v2
 
 2. **Bidding**:
@@ -151,7 +181,8 @@ Try one of these solutions:
 - `programs/escrow/src/state/` - Account structures (event.rs, ticket.rs, user.rs, bid.rs)
 - `programs/escrow/src/error.rs` - Custom error definitions
 - `programs/escrow/tests/ticketfair_auction.rs` - Rust tests for auction flows
-- `tests/escrow.test.ts` - TypeScript test suite
+- `tests/escrow.test.ts` - Basic TypeScript tests for escrow functionality
+- `tests/ticketfair.test.ts` - TypeScript tests for TicketFair functionality
 - `create-codama-client.ts` - Script to generate TypeScript client
 
 ### Development Workflow
@@ -159,3 +190,23 @@ Try one of these solutions:
 - Project follows a phased approach with clear milestones (see phase1/PHASE1.md)
 - Changes are tracked in feature branches using a "phase-N" naming convention
 - Tests are required for all new functionality before merging
+
+### Debugging and Common Issues
+
+1. **Dependency Resolution**:
+   - If you encounter errors about conflicting versions of Solana dependencies, see the Dependency Management Notes section.
+
+2. **Bubblegum Integration**:
+   - Currently behind a feature flag. Code that depends on Bubblegum is conditionally compiled using `#[cfg(feature = "bubblegum")]` and simulated in non-feature flag mode.
+
+3. **Test Environment**:
+   - Ensure you're using the specified nightly Rust toolchain for consistent builds:
+   ```bash
+   RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test
+   ```
+
+4. **TypeScript Client**:
+   - After any change to the program's instructions or accounts, regenerate the TypeScript client:
+   ```bash
+   npx tsx create-codama-client.ts
+   ```

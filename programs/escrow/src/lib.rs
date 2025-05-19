@@ -70,4 +70,42 @@ pub mod escrow {
     ) -> Result<()> {
         handlers::ticketfair_user::create_user(context)
     }
+
+    /// Activate a Ticketfair event (change status from Created to Active).
+    pub fn activate_event(
+        context: Context<ActivateEventAccountConstraints>,
+    ) -> Result<()> {
+        handlers::ticketfair_event::activate_event(context)
+    }
+
+    /// Finalize a Ticketfair auction and set the closing price.
+    pub fn finalize_auction(
+        context: Context<FinalizeEventAccountConstraints>,
+        close_price: u64,
+    ) -> Result<()> {
+        handlers::ticketfair_event::finalize_auction(context, close_price)
+    }
+
+    /// Place a bid for a ticket in a Ticketfair Dutch auction.
+    pub fn place_bid(
+        context: Context<PlaceBidAccountConstraints>,
+        amount: u64,
+    ) -> Result<()> {
+        handlers::ticketfair_bid::place_bid(context, amount)
+    }
+
+    /// Award a ticket to a bid in a Ticketfair Dutch auction.
+    pub fn award_ticket(
+        context: Context<AwardTicketAccountConstraints>,
+        cnft_asset_id: Pubkey,
+    ) -> Result<()> {
+        handlers::ticketfair_bid::award_ticket(context, cnft_asset_id)
+    }
+
+    /// Refund a bid in a Ticketfair Dutch auction.
+    pub fn refund_bid(
+        context: Context<RefundBidAccountConstraints>,
+    ) -> Result<()> {
+        handlers::ticketfair_bid::refund_bid(context)
+    }
 }

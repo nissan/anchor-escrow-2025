@@ -1,6 +1,7 @@
 //! Ticketfair Event account definition (Dutch Auction)
 
 use anchor_lang::prelude::*;
+use crate::constants::*;
 
 #[account]
 pub struct Event {
@@ -33,9 +34,19 @@ pub struct Event {
 }
 
 impl Event {
-    pub const MAX_METADATA_URL_LEN: usize = 200;
-    pub const MAX_TICKETS: usize = 1000;
-    pub const INIT_SPACE: usize = 32 + 4 + Self::MAX_METADATA_URL_LEN + 4 + 4 + 8 + 8 + 8 + 8 + 8 + 1 + 1 + 32 + 4 + (32 * Self::MAX_TICKETS);
+    pub const INIT_SPACE: usize = 32 + // organizer pubkey
+                               4 + MAX_METADATA_URL_LEN + // metadata_url string
+                               4 + // ticket_supply
+                               4 + // tickets_awarded
+                               8 + // start_price
+                               8 + // end_price
+                               8 + // auction_start_time
+                               8 + // auction_end_time
+                               8 + // auction_close_price
+                               1 + // status 
+                               1 + // bump
+                               32 + // merkle_tree
+                               4 + (32 * MAX_TICKETS_TEST_MODE as usize); // cnft_asset_ids vector
 
     /// Calculate the current auction price based on the event parameters and the given timestamp.
     pub fn get_current_auction_price(&self, now: i64) -> u64 {
@@ -50,4 +61,18 @@ impl Event {
             self.start_price - ((price_diff as i64 * elapsed) / duration) as u64
         }
     }
-} 
+
+    /// Check if the auction is within the valid time window for bidding
+    pub fn is_active_for_bidding(&self, now: i64) -> bool {
+        self.status == EVENT_STATUS_ACTIVE && 
+        now >= self.auction_start_time && 
+        now <= self.auction_end_time
+    }
+
+    /// Check if the auction is in a valid state for finalizing (setting close price)
+    pub fn can_finalize(&self, now: i64) -> bool {
+        self.status == EVENT_STATUS_ACTIVE && 
+        now >= self.auction_end_time &&
+        self.auction_close_price == 0
+    }
+}

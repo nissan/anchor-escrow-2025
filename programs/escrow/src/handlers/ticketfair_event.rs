@@ -2,6 +2,8 @@
 
 use anchor_lang::prelude::*;
 use crate::state::Event;
+use crate::constants::*;
+use crate::error::ErrorCode;
 
 // We'll add these imports back when we properly integrate Bubblegum
 // #[cfg(feature = "bubblegum")]
@@ -16,7 +18,7 @@ pub struct CreateEventAccountConstraints<'info> {
     #[account(
         init,
         payer = organizer,
-        space = Event::DISCRIMINATOR.len() + Event::INIT_SPACE,
+        space = 8 + Event::INIT_SPACE, // 8 bytes for discriminator
         seeds = [b"event", organizer.key().as_ref()],
         bump
     )]
@@ -50,6 +52,21 @@ pub fn create_event(
     auction_end_time: i64,
 ) -> Result<()> {
     let event = &mut context.accounts.event;
+    
+    // Validate parameters
+    if ticket_supply > MAX_TICKETS_PER_EVENT {
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error
+    }
+    
+    if start_price < MIN_TICKET_PRICE || end_price < MIN_TICKET_PRICE {
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error
+    }
+    
+    let duration = auction_end_time - auction_start_time;
+    if duration < MIN_AUCTION_DURATION || duration > MAX_AUCTION_DURATION {
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error
+    }
+    
     event.organizer = context.accounts.organizer.key();
     event.metadata_url = metadata_url.clone();
     event.ticket_supply = ticket_supply;
@@ -59,10 +76,11 @@ pub fn create_event(
     event.auction_start_time = auction_start_time;
     event.auction_end_time = auction_end_time;
     event.auction_close_price = 0;
-    event.status = 0;
+    event.status = EVENT_STATUS_CREATED;
     event.bump = context.bumps.event;
     event.merkle_tree = context.accounts.merkle_tree.key();
-    event.cnft_asset_ids = Vec::new();
+    let ticket_supply_to_reserve = ticket_supply as usize;
+    event.cnft_asset_ids = Vec::with_capacity(ticket_supply_to_reserve);
 
     // Bubblegum CPI: Mint cNFTs for ticket supply
     #[cfg(feature = "bubblegum")]
@@ -122,5 +140,76 @@ pub fn create_event(
         }
     }
 
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct ActivateEventAccountConstraints<'info> {
+    #[account(mut)]
+    pub organizer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"event", organizer.key().as_ref()],
+        bump,
+        constraint = event.organizer == organizer.key() @ ErrorCode::CustomError,
+    )]
+    pub event: Account<'info, Event>,
+}
+
+pub fn activate_event(
+    context: Context<ActivateEventAccountConstraints>,
+) -> Result<()> {
+    let event = &mut context.accounts.event;
+    
+    // Only activate if the event is in the Created state
+    if event.status != EVENT_STATUS_CREATED {
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error
+    }
+    
+    // Set the event status to Active
+    event.status = EVENT_STATUS_ACTIVE;
+    
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct FinalizeEventAccountConstraints<'info> {
+    #[account(mut)]
+    pub organizer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"event", organizer.key().as_ref()],
+        bump,
+        constraint = event.organizer == organizer.key() @ ErrorCode::CustomError,
+    )]
+    pub event: Account<'info, Event>,
+}
+
+pub fn finalize_auction(
+    context: Context<FinalizeEventAccountConstraints>,
+    close_price: u64,
+) -> Result<()> {
+    let event = &mut context.accounts.event;
+    
+    // Get current time
+    let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
+    
+    // Check if the auction can be finalized
+    if !event.can_finalize(now) {
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error
+    }
+    
+    // Validate close price is between start and end prices
+    if close_price > event.start_price || close_price < event.end_price {
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error
+    }
+    
+    // Set the auction close price
+    event.auction_close_price = close_price;
+    
+    // Update event status to finalized
+    event.status = EVENT_STATUS_FINALIZED;
+    
     Ok(())
 }

@@ -2,6 +2,8 @@
 
 use anchor_lang::prelude::*;
 use crate::state::{Bid, Event, Ticket};
+use crate::constants::*;
+use crate::error::ErrorCode;
 
 // We'll add this import back when we properly integrate Bubblegum
 // #[cfg(feature = "bubblegum")]
@@ -42,20 +44,20 @@ pub fn place_bid(
     let now = clock.unix_timestamp;
 
     // Check auction status
-    if event.status != 1 {
-        return Err(error!(crate::error::ErrorCode::AuctionNotActive));
+    if event.status != EVENT_STATUS_ACTIVE {
+        return Err(error!(ErrorCode::AuctionNotActive));
     }
     if now < event.auction_start_time {
-        return Err(error!(crate::error::ErrorCode::AuctionNotStarted));
+        return Err(error!(ErrorCode::AuctionNotStarted));
     }
     if now > event.auction_end_time {
-        return Err(error!(crate::error::ErrorCode::AuctionEnded));
+        return Err(error!(ErrorCode::AuctionEnded));
     }
 
     // Calculate current auction price
     let current_price = event.get_current_auction_price(now);
     if amount != current_price {
-        return Err(error!(crate::error::ErrorCode::BidNotAtCurrentPrice));
+        return Err(error!(ErrorCode::BidNotAtCurrentPrice));
     }
 
     // Escrow funds from bidder to event PDA
@@ -71,13 +73,13 @@ pub fn place_bid(
             event_pda.to_account_info(),
             context.accounts.system_program.to_account_info(),
         ],
-    ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+    ).map_err(|_| error!(ErrorCode::CustomError))?;
 
     // Record the bid
     bid.bidder = bidder.key();
     bid.event = event.key();
     bid.amount = amount;
-    bid.status = 0; // Pending
+    bid.status = BID_STATUS_PENDING;
     bid.bump = context.bumps.bid;
 
     Ok(())
@@ -129,16 +131,22 @@ pub fn award_ticket(
 
     // Only the organizer can award tickets
     if event.organizer != organizer.key() {
-        return Err(error!(crate::error::ErrorCode::CustomError)); // Replace with specific error if desired
+        return Err(error!(ErrorCode::CustomError)); // Replace with specific error if desired
     }
-    if event.status != 1 {
-        return Err(error!(crate::error::ErrorCode::AuctionNotActive));
+    
+    // Check event and bid status
+    if event.status != EVENT_STATUS_ACTIVE {
+        return Err(error!(ErrorCode::AuctionNotActive));
     }
-    if bid.status != 0 {
-        return Err(error!(crate::error::ErrorCode::CustomError)); // Replace with BidNotPending if desired
+    
+    // Use the helper method to check if bid can be awarded
+    if !bid.can_award() {
+        return Err(error!(ErrorCode::CustomError)); // Replace with BidNotPending if desired
     }
+    
+    // Check if tickets are still available
     if event.tickets_awarded >= event.ticket_supply {
-        return Err(error!(crate::error::ErrorCode::CustomError)); // Replace with TicketsSoldOut if desired
+        return Err(error!(ErrorCode::CustomError)); // Replace with TicketsSoldOut if desired
     }
 
     // We'll use these in both branches
@@ -171,7 +179,7 @@ pub fn award_ticket(
         //         context.accounts.system_program.to_account_info(),
         //     ],
         //     &[_event_pda_seeds],
-        // ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+        // ).map_err(|_| error!(ErrorCode::CustomError))?;
     }
 
     // When bubblegum feature is not enabled, we just simulate the transfer
@@ -179,13 +187,13 @@ pub fn award_ticket(
     msg!("Bubblegum feature not enabled - simulating cNFT transfer for asset ID: {}", cnft_asset_id);
 
     // Mark bid as awarded
-    bid.status = 1;
-    event.tickets_awarded = event.tickets_awarded.checked_add(1).ok_or(error!(crate::error::ErrorCode::CustomError))?;
+    bid.status = BID_STATUS_AWARDED;
+    event.tickets_awarded = event.tickets_awarded.checked_add(1).ok_or(error!(ErrorCode::CustomError))?;
 
     // Create ticket
     ticket.owner = bid.bidder;
     ticket.event = event.key();
-    ticket.status = 0; // Owned
+    ticket.status = TICKET_STATUS_OWNED;
     ticket.offchain_ref = String::new(); // To be set by user later
     ticket.bump = context.bumps.ticket;
     ticket.cnft_asset_id = cnft_asset_id;
@@ -215,18 +223,23 @@ pub fn refund_bid(
     let bidder = &context.accounts.bidder;
     let event_pda = &context.accounts.event_pda;
 
-    // Only allow refund if not already refunded
-    if bid.status == 2 {
-        return Err(error!(crate::error::ErrorCode::CustomError)); // Already refunded
+    // Use the helper method to check if bid can be refunded
+    if !bid.can_refund() {
+        return Err(error!(ErrorCode::CustomError)); // Already refunded
     }
 
-    let mut refund_amount = 0u64;
-    if bid.status == 0 {
+    let refund_amount;
+    if bid.status == BID_STATUS_PENDING {
         // Case 1: Bid did not win, full refund
         refund_amount = bid.amount;
-        bid.status = 2; // Refunded
-    } else if bid.status == 1 {
+        bid.status = BID_STATUS_REFUNDED;
+    } else if bid.status == BID_STATUS_AWARDED {
         // Case 2: Bid won, partial refund if closing price < bid amount
+        // We need the auction to be finalized to know the closing price
+        if event.status != EVENT_STATUS_FINALIZED || event.auction_close_price == 0 {
+            return Err(error!(ErrorCode::CustomError)); // Auction not finalized, can't refund
+        }
+        
         let close_price = event.auction_close_price;
         if bid.amount > close_price {
             refund_amount = bid.amount - close_price;
@@ -236,7 +249,7 @@ pub fn refund_bid(
         }
         // Do not mark as refunded, as the ticket is already awarded
     } else {
-        return Err(error!(crate::error::ErrorCode::CustomError)); // Invalid bid status
+        return Err(error!(ErrorCode::CustomError)); // Invalid bid status
     }
 
     if refund_amount > 0 {
@@ -254,7 +267,7 @@ pub fn refund_bid(
                 context.accounts.system_program.to_account_info(),
             ],
             &[event_pda_seeds],
-        ).map_err(|_| error!(crate::error::ErrorCode::CustomError))?;
+        ).map_err(|_| error!(ErrorCode::CustomError))?;
     }
 
     Ok(())
