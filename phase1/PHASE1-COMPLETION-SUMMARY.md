@@ -52,9 +52,15 @@ Phase 1 of the TicketFair platform has been successfully completed, implementing
 2. **TypeScript Integration Tests**
    - ❌ Tests need updates to match latest program changes
    - ⚠️ Current test failures due to:
-     - Index mismatches in instruction dispatching
-     - Missing TypeScript client updates for new instructions
-     - Test structure updates needed for new account validation
+     - Index mismatches in instruction dispatching (partially fixed)
+     - PublicKey handling issues causing `_bn` errors
+     - Account validation errors for instructions like `finalize_auction`
+     - Inconsistent client usage (some tests use manual construction, some use client)
+     - Feature flag handling issues
+   - 🔄 Initial updates made to TypeScript tests:
+     - Updated some instruction calls to use client methods instead of hardcoded indices
+     - Added test for new `finalize_auction` instruction
+     - Created comprehensive TYPESCRIPT-TEST-UPDATE-PLAN.md for next steps
 
 3. **Client Generation**
    - ✅ TypeScript client generation working

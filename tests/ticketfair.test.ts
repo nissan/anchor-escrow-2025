@@ -115,14 +115,10 @@ describe("Ticketfair", () => {
       let event = await programClient.fetchEvent(connection.rpc, eventAddress);
       assert.strictEqual(event.status, 0); // Created
       
-      // Now use our activate_event instruction
-      const activateEventIx = createTxInstruction({
-        keys: [
-          { pubkey: new PublicKey(organizer.address), isSigner: true, isWritable: true },
-          { pubkey: eventAddress, isSigner: false, isWritable: true },
-        ],
-        programId: new PublicKey(programClient.PROGRAM_ID),
-        data: Buffer.from([6]), // 6 is the index for activate_event instruction
+      // Use the generated client method for activate_event instruction
+      const activateEventIx = await programClient.getActivateEventInstructionAsync({
+        organizer,
+        event: eventAddress,
       });
       
       // Send the transaction
@@ -134,6 +130,29 @@ describe("Ticketfair", () => {
       // Verify the event status was updated
       event = await programClient.fetchEvent(connection.rpc, eventAddress);
       assert.strictEqual(event.status, 1); // Active
+    });
+
+    it("finalizes auction with a closing price", async () => {
+      // We need to modify timestamps to simulate auction end
+      const closePrice = BigInt(startPrice) / 2n; // 50% of start price
+      
+      // Use the generated client method for finalize_auction instruction
+      const finalizeAuctionIx = await programClient.getFinalizeAuctionInstructionAsync({
+        organizer,
+        event: eventAddress,
+        closePrice,
+      });
+      
+      // Send the transaction
+      await connection.sendTransactionFromInstructions({
+        feePayer: organizer,
+        instructions: [finalizeAuctionIx],
+      });
+      
+      // Verify the auction was finalized
+      const event = await programClient.fetchEvent(connection.rpc, eventAddress);
+      assert.strictEqual(event.status, 2); // Finalized
+      assert.strictEqual(event.auctionClosePrice, closePrice);
     });
   });
 
@@ -177,14 +196,10 @@ describe("Ticketfair", () => {
         instructions: [createEventInstruction],
       });
 
-      // Activate the event using our new instruction
-      const activateEventIx = createTxInstruction({
-        keys: [
-          { pubkey: new PublicKey(organizer.address), isSigner: true, isWritable: true },
-          { pubkey: eventAddress, isSigner: false, isWritable: true },
-        ],
-        programId: new PublicKey(programClient.PROGRAM_ID),
-        data: Buffer.from([6]), // 6 is the index for activate_event instruction
+      // Activate the event using the generated client method
+      const activateEventIx = await programClient.getActivateEventInstructionAsync({
+        organizer,
+        event: eventAddress,
       });
       
       // Send the transaction
@@ -231,20 +246,11 @@ describe("Ticketfair", () => {
       
       console.log(`Current auction price: ${currentPrice} lamports`);
       
-      // Manually construct the place_bid instruction
-      const placeIx = createTxInstruction({
-        keys: [
-          { pubkey: new PublicKey(buyer1.address), isSigner: true, isWritable: true },
-          { pubkey: eventAddress, isSigner: false, isWritable: true },
-          { pubkey: eventPdaAddress, isSigner: false, isWritable: true },
-          { pubkey: bidAddress, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ],
-        programId: new PublicKey(programClient.PROGRAM_ID),
-        data: Buffer.from([
-          7, // place_bid instruction index (updated based on lib.rs)
-          ...new Uint8Array(new BigUint64Array([BigInt(currentPrice)]).buffer),
-        ]),
+      // Use the generated client method for place_bid instruction
+      const placeIx = await programClient.getPlaceBidInstructionAsync({
+        bidder: buyer1,
+        event: eventAddress,
+        bidAmount: currentPrice,
       });
       
       try {
@@ -303,20 +309,11 @@ describe("Ticketfair", () => {
       const incorrectPrice = currentPrice + (currentPrice / 5n);
       console.log(`Current auction price: ${currentPrice} lamports, using incorrect price: ${incorrectPrice} lamports`);
       
-      // Manually construct the place_bid instruction with the wrong price
-      const placeIx = createTxInstruction({
-        keys: [
-          { pubkey: new PublicKey(buyer2.address), isSigner: true, isWritable: true },
-          { pubkey: eventAddress, isSigner: false, isWritable: true },
-          { pubkey: eventPdaAddress, isSigner: false, isWritable: true },
-          { pubkey: bidAddress, isSigner: false, isWritable: true },
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ],
-        programId: new PublicKey(programClient.PROGRAM_ID),
-        data: Buffer.from([
-          7, // place_bid instruction index (updated based on lib.rs)
-          ...new Uint8Array(new BigUint64Array([incorrectPrice]).buffer),
-        ]),
+      // Use the generated client method for place_bid with incorrect price
+      const placeIx = await programClient.getPlaceBidInstructionAsync({
+        bidder: buyer2,
+        event: eventAddress,
+        bidAmount: incorrectPrice,
       });
       
       try {

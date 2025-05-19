@@ -7,16 +7,23 @@ The TypeScript tests for the TicketFair platform need updating to match the late
 1. **Instruction Index Mismatches**
    - The test file uses hardcoded instruction indices that no longer match the program
    - Several instruction handlers have been added/modified
+   - We began updating these to use the client methods (e.g., for activate_event, place_bid)
 
-2. **Missing Client Methods**
-   - New instructions like `finalize_auction` aren't exposed in the TypeScript client
-   - The client needs to be regenerated and validated
+2. **PublicKey Handling Issues**
+   - Many tests fail with `Cannot read properties of undefined (reading '_bn')` errors
+   - This appears to be due to incompatibilities between the PublicKey handling in the tests versus client
 
-3. **Account Constraints**
-   - Some tests fail due to updated account validation requirements
+3. **Account Validation Errors**
+   - Some instructions fail with account validation errors like "The program expected this account to be already initialized"
+   - The finalize_auction test appears to be failing with this kind of error
 
-4. **Feature Flags**
+4. **Missing Proper Client Usage**
+   - Several tests manually construct transactions instead of using the generated client
+   - We've updated some but a more comprehensive approach is needed
+
+5. **Feature Flags**
    - Tests don't account for feature flag conditionals in the program
+   - Some tests might be trying to access account fields that don't exist in the current version
 
 ## Update Approach
 
