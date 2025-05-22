@@ -16,8 +16,8 @@ pub struct PlaceBidAccountConstraints<'info> {
     #[account(mut)]
     pub event: Account<'info, Event>,
     /// The PDA that will hold escrowed funds for the event
-    /// Seeds: [b"event", organizer.key().as_ref()]
-    #[account(mut, seeds = [b"event", event.organizer.as_ref()], bump = event.bump)]
+    /// Seeds: [b"escrow", event.key().as_ref()]
+    #[account(mut, seeds = [b"escrow", event.key().as_ref()], bump)]
     pub event_pda: SystemAccount<'info>,
     #[account(
         init,
@@ -210,7 +210,7 @@ pub struct RefundBidAccountConstraints<'info> {
     #[account(mut)]
     pub bid: Account<'info, Bid>,
     /// Event PDA (escrow authority)
-    #[account(mut, seeds = [b"event", event.organizer.as_ref()], bump = event.bump)]
+    #[account(mut, seeds = [b"escrow", event.key().as_ref()], bump)]
     pub event_pda: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -253,7 +253,9 @@ pub fn refund_bid(
     }
 
     if refund_amount > 0 {
-        let event_pda_seeds: &[&[u8]] = &[b"event", event.organizer.as_ref(), &[event.bump]];
+        let event_key = event.key();
+        let bump = &[context.bumps.event_pda];
+        let event_pda_seeds: &[&[u8]] = &[b"escrow", event_key.as_ref(), bump];
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             &event_pda.key(),
             &bidder.key(),

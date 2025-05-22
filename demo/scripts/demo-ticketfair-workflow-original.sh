@@ -86,7 +86,9 @@ setup_demo() {
     print_status $GREEN "✅ Program verified: $PROGRAM_ID"
     
     print_step 3 "Generating TypeScript client"
+    cd ../../  # Go to project root
     npx tsx create-codama-client.ts >/dev/null 2>&1
+    cd demo/scripts  # Return to script directory
     print_status $GREEN "✅ Client generated"
     
     echo "Setup completed successfully" >> "$LOG_FILE"
@@ -101,7 +103,7 @@ import { connect } from "solana-kite";
 import * as fs from "fs";
 
 async function createOrganizer() {
-    const connection = await connect("https://api.devnet.solana.com");
+    const connection = await connect("devnet");
     const organizer = await connection.createWallet({ airdropAmount: 5000000000n });
     
     fs.writeFileSync("demo-accounts.json", JSON.stringify({
@@ -126,7 +128,9 @@ import { connect } from "solana-kite";
 import * as fs from "fs";
 
 async function createBidders() {
-    const connection = await connect("https://api.devnet.solana.com");
+    const connection = await connect("devnet");
+    // Add delay to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 3000));
     const bidders = await connection.createWallets(3, { airdropAmount: 2000000000n });
     
     const accounts = JSON.parse(fs.readFileSync("demo-accounts.json", "utf8"));
@@ -165,8 +169,8 @@ create_auction_event() {
     local end_time=$((start_time + AUCTION_DURATION))
     
     print_step 1 "Event Parameters"
-    echo "   📅 Start Time: $(date -d @$start_time '+%H:%M:%S')"
-    echo "   📅 End Time: $(date -d @$end_time '+%H:%M:%S')"
+    echo "   📅 Start Time: $(date -r $start_time '+%H:%M:%S')"
+    echo "   📅 End Time: $(date -r $end_time '+%H:%M:%S')"
     echo "   ⏱️  Duration: $AUCTION_DURATION seconds"
     echo "   🎫 Tickets: 1 (Dutch auction for single ticket)"
     echo "   💰 Start Price: 1.0 SOL"
@@ -177,17 +181,19 @@ create_auction_event() {
     
     cat > "$DEMO_DIR/create-event.ts" << EOF
 import { connect } from "solana-kite";
-import * as programClient from "../dist/js-client/index.js";
+import * as programClient from "../../dist/js-client/index.js";
 import * as fs from "fs";
 
 async function createEvent() {
-    const connection = await connect("https://api.devnet.solana.com");
+    const connection = await connect("devnet");
     const accounts = JSON.parse(fs.readFileSync("demo-accounts.json", "utf8"));
     
     // Recreate organizer wallet (in real app this would be from stored keys)
     const organizer = await connection.createWallet({ airdropAmount: 100000000n });
     
     // Create dummy accounts for Bubblegum (simplified for demo)
+    // Use a delay to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 2000));
     const dummyAccounts = await connection.createWallets(5, { airdropAmount: 10000000n });
     
     const createEventIx = await programClient.getCreateEventInstructionAsync({
@@ -350,12 +356,12 @@ place_bid() {
     
     cat > "$DEMO_DIR/place-bid-${bidder_num}.ts" << EOF
 import { connect } from "solana-kite";
-import * as programClient from "../dist/js-client/index.js";
+import * as programClient from "../../dist/js-client/index.js";
 import * as fs from "fs";
 import { PublicKey } from "@solana/web3.js";
 
 async function placeBid() {
-    const connection = await connect("https://api.devnet.solana.com");
+    const connection = await connect("devnet");
     const accounts = JSON.parse(fs.readFileSync("demo-accounts.json", "utf8"));
     
     // Recreate bidder wallet
@@ -556,8 +562,9 @@ main() {
     echo "Press Ctrl+C to exit at any time"
     echo ""
     
-    # Change to script directory
+    # Change to script directory and then to archived-runs for demo artifacts
     cd "$(dirname "$0")"
+    cd ../archived-runs
     
     # Check dependencies
     if ! command -v jq &> /dev/null; then

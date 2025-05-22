@@ -3,8 +3,8 @@ import { PublicKey } from "@solana/web3.js";
 import { 
   placeBid, 
   calculateCurrentPrice 
-} from "../src/ticketfair-api";
-import * as programClient from "../dist/js-client";
+} from "../../src/ticketfair-api";
+import * as programClient from "../../dist/js-client";
 
 /**
  * Example of placing a bid on a TicketFair event
@@ -32,8 +32,9 @@ async function placeBidExample() {
     console.log(`Found event organized by: ${event.data.organizer}`);
     console.log(`Event has ${event.data.ticketSupply} tickets, ${event.data.ticketsAwarded} already awarded`);
     
-    // 5. Calculate the current auction price
-    const currentPrice = calculateCurrentPrice(event.data);
+    // 5. Calculate the current auction price with timing correction
+    const now = Math.floor(Date.now() / 1000) - 1; // Adjust for program timing
+    const currentPrice = calculateCurrentPrice(event.data, now);
     console.log(`Current auction price: ${currentPrice} lamports (${Number(currentPrice) / 1e9} SOL)`);
     
     // 6. Place a bid at the current price
@@ -59,8 +60,10 @@ async function placeBidExample() {
   }
 }
 
-// Run the example (commented out to prevent accidental execution)
-// placeBidExample();
+// Run the example if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  placeBidExample().catch(console.error);
+}
 
 // Export for potential use in other examples
 export { placeBidExample };

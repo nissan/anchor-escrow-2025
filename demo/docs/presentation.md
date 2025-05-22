@@ -14,7 +14,9 @@ footer: 'Built with Anchor Framework • Deployed on Devnet • Powered by AI'
 
 **A Solana-powered ticketing platform using compressed NFTs and fair price discovery**
 
-*Presented by: Development Team*  
+*Presented by: Nissan Dookeran* 
+*<nissan@reddi.tech>*
+*X/TG: @redditech*  
 *Date: May 2025*
 
 ---
@@ -667,12 +669,45 @@ We'll now demonstrate TicketFair's complete workflow live on Solana devnet:
 
 ---
 
+## **🎬 Live Demo Scripts**
+
+We've created a comprehensive demo system with modular scripts:
+
+### **Individual Demo Scripts**
+```bash
+# 1. Create an event with Dutch auction parameters
+npm run demo:create-event -- --name "Concert" --tickets 100 \
+  --start-price 2.0 --end-price 0.5 --duration 60
+
+# 2. Place a bid on an active event
+npm run demo:place-bid -- --event EVENT_ADDRESS \
+  --bidder-name "Alice"
+
+# 3. Finalize auction with awards and refunds  
+npm run demo:finalize -- --event EVENT_ADDRESS \
+  --close-price 0.75
+
+# 4. Complete end-to-end auction simulation
+npm run demo:full-auction -- --name "Stadium Concert" \
+  --tickets 50 --duration 10 --bidders 20
+```
+
+### **Demo Features**
+- ✅ **Parameterized**: Customizable event parameters
+- ✅ **Modular**: Individual scripts for specific operations  
+- ✅ **Time-aware**: Proper auction timing validation
+- ✅ **JSON Output**: Structured data for automation
+- ✅ **Error Handling**: Comprehensive validation and feedback
+
+---
+
 ## **🎬 Live Demo Time!**
 
 *[Execute the demo script now]*
 
 ```bash
-./demo-ticketfair-workflow.sh
+npm run demo:full-auction -- --name "Live Demo" --tickets 5 \
+  --start-price 1.0 --end-price 0.2 --duration 5 --bidders 3
 ```
 
 ---

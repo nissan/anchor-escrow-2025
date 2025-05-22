@@ -58,34 +58,46 @@ build-sbf version:
 
 Using different versions may cause compatibility issues.
 
-## Usage
+## Repository Organization
 
-1. Clone the repository:
+This repository is now organized for both **development** and **demonstration** purposes:
 
-   ```bash
-   git clone https://github.com/mikemaccana/anchor-escrow-2025.git
-   cd anchor-escrow-2025
-   ```
+### 🎬 Demo Materials (`demo/`)
+Ready-to-use demonstration suite:
+- **Quick Demo**: `npm run demo:full-auction`
+- **Complete Guide**: `demo/docs/DEMO.md`
+- **Live Scripts**: `demo/scripts/`
+- **Code Examples**: `demo/examples/`
 
-2. Install dependencies:
+### 🛠 Development (`development/`)
+Technical documentation and planning:
+- **Phase Documentation**: `development/phases/`
+- **Deployment Guides**: `development/docs/`
+- **Testing Strategies**: `development/docs/TESTING.md`
 
-   ```bash
-   npm install
-   ```
+## Quick Start
 
-3. Run tests:
+### For Demonstrations
+```bash
+# Check demo prerequisites
+./demo/scripts/check-demo-deps.sh
 
-   ```bash
-   # RUSTUP_TOOLCHAIN is needed for consistent builds per
-   # https://solana.stackexchange.com/questions/21664/why-is-the-same-commit-of-an-anchor-repo-giving-different-results-when-run-at-di
-   # TODO: remove when no longer necessary
-   RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test
-   ```
+# Run complete demo workflow
+npm run demo:full-auction
+```
 
-4. Deploy the program:
-   ```bash
-   anchor deploy
-   ```
+### For Development
+```bash
+# Install dependencies
+npm install
+
+# Build and test
+npm run build
+RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test
+
+# Deploy to devnet
+anchor deploy
+```
 
 ## Changelog and Credits
 

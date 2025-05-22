@@ -9,7 +9,16 @@
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "show-versions": "bash show-versions.sh",
-    "generate-client": "npx tsx create-codama-client.ts"
+    "generate-client": "npx tsx create-codama-client.ts",
+    "demo:create-event": "npx tsx demo/examples/create-event.ts",
+    "demo:place-bid": "npx tsx demo/examples/place-bid.ts",
+    "demo:finalize": "npx tsx demo/examples/award-and-finalize.ts",
+    "demo:full-auction": "npx tsx demo/examples/demo-full-auction.ts",
+    "demo:help": "echo 'TicketFair Demo Scripts:\n  npm run demo:create-event -- --name \"Concert\" --tickets 10 --start-price 1.0 --end-price 0.2 --duration 30\n  npm run demo:place-bid -- --event EVENT_ADDRESS --bidder-name \"Alice\"\n  npm run demo:finalize -- --event EVENT_ADDRESS --close-price 0.5\n  npm run demo:full-auction -- --name \"Concert\" --tickets 5 --duration 3 --bidders 8'",
+    "demo:present": "./demo/scripts/present-3min-demo.sh",
+    "demo:3min": "./demo/scripts/demo-3min-presentation.sh",
+    "demo:turbin3": "./demo/turbin3/scripts/turbin3-90sec-demo.sh",
+    "demo:turbin3-setup": "./demo/turbin3/scripts/setup-turbin3-presentation.sh"
   },
   "license": "MIT",
   "devDependencies": {

@@ -1,5 +1,5 @@
 import { Connection } from "solana-kite";
-import * as programClient from "./dist/js-client";
+import * as programClient from "../dist/js-client";
 import { type KeyPairSigner, type Address } from "@solana/kit";
 import { PublicKey } from "@solana/web3.js";
 
@@ -18,16 +18,107 @@ export function calculateCurrentPrice(
   } else if (now >= Number(event.auctionEndTime)) {
     return event.endPrice;
   } else {
-    const elapsed = now - Number(event.auctionStartTime);
-    const duration = Number(event.auctionEndTime) - Number(event.auctionStartTime);
-    const priceDiff = Number(event.startPrice) - Number(event.endPrice);
-    const calculatedPrice = BigInt(Math.floor(Number(event.startPrice) - ((priceDiff * elapsed) / duration)));
+    // Match Rust integer arithmetic exactly to avoid precision errors
+    const elapsed = BigInt(now - Number(event.auctionStartTime));
+    const duration = BigInt(Number(event.auctionEndTime) - Number(event.auctionStartTime));
+    const priceDiff = event.startPrice - event.endPrice;
+    
+    // Rust calculation: start_price - ((price_diff * elapsed) / duration)
+    const reduction = (priceDiff * elapsed) / duration;
+    const calculatedPrice = event.startPrice - reduction;
     return calculatedPrice;
   }
 }
 
 /**
- * Creates and activates a new TicketFair event
+ * Creates a simple event for testing (simplified version without Bubblegum)
+ */
+export async function createEvent(
+  connection: Connection,
+  params: {
+    organizer?: KeyPairSigner; // Optional - will create unique organizer if not provided
+    name: string;
+    description: string;
+    ticketSupply: number;
+    startPrice: bigint;
+    endPrice: bigint;
+    startTime: number;
+    endTime: number;
+  }
+) {
+  // Create a unique organizer if not provided to avoid PDA collisions
+  let organizer = params.organizer;
+  if (!organizer) {
+    const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2)}-${process.pid}`;
+    console.log(`Creating unique organizer for event: ${uniqueId}`);
+    organizer = await connection.createWallet({ airdropAmount: 3_000_000_000n }); // 3 SOL
+    
+    // Brief wait to ensure airdrop confirms
+    await new Promise(resolve => setTimeout(resolve, 800));
+  }
+
+  // Create dummy addresses for the Bubblegum-related parameters
+  const merkleTree = PublicKey.unique();
+  const bubblegumProgram = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY";
+  const logWrapper = "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV";
+  const compressionProgram = "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK";
+  const noopProgram = "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV";
+
+  console.log("Creating event with organizer:", organizer.address);
+
+  // Create the event
+  const createEventInstruction = await programClient.getCreateEventInstructionAsync({
+    organizer,
+    merkleTree,
+    bubblegumProgram,
+    logWrapper,
+    compressionProgram,
+    noopProgram,
+    metadataUrl: `{"name":"${params.name}","description":"${params.description}"}`,
+    ticketSupply: params.ticketSupply,
+    startPrice: params.startPrice,
+    endPrice: params.endPrice,
+    auctionStartTime: BigInt(params.startTime),
+    auctionEndTime: BigInt(params.endTime),
+  });
+
+  // Get the event address from the instruction
+  const eventAddress = createEventInstruction.accounts[1].address;
+
+  // Send the transaction to create the event
+  const createTx = await connection.sendTransactionFromInstructions({
+    feePayer: organizer,
+    instructions: [createEventInstruction],
+  });
+
+  // Brief wait for event creation confirmation
+  await new Promise(resolve => setTimeout(resolve, 600));
+
+  // Activate the event
+  const activateEventIx = await programClient.getActivateEventInstructionAsync({
+    organizer,
+    event: eventAddress,
+  });
+
+  // Send the transaction to activate the event
+  const activateTx = await connection.sendTransactionFromInstructions({
+    feePayer: organizer,
+    instructions: [activateEventIx],
+  });
+
+  // Wait for transaction confirmation
+  await new Promise(resolve => setTimeout(resolve, 600));
+
+  return {
+    eventAddress,
+    createTx,
+    activateTx,
+    organizer: organizer.address // Return organizer address for reference
+  };
+}
+
+/**
+ * Creates and activates a new TicketFair event (full Bubblegum version)
  */
 export async function createAndActivateEvent(
   connection: Connection,
@@ -117,17 +208,28 @@ export async function placeBid(
   
   // Find the organizer from the event address by fetching the event data
   const eventData = await programClient.fetchEvent(connection.rpc, params.event);
-  const organizerPubkey = new PublicKey(eventData.organizer);
   
-  // Derive the event PDA address
+  // Handle organizer field which might be a string or an object
+  let organizerKey: string;
+  if (typeof eventData.data.organizer === 'string') {
+    organizerKey = eventData.data.organizer;
+  } else if (eventData.data.organizer && typeof eventData.data.organizer.toString === 'function') {
+    organizerKey = eventData.data.organizer.toString();
+  } else {
+    throw new Error('Cannot extract organizer key from event data');
+  }
+  
+  const organizerPubkey = new PublicKey(organizerKey);
+  
+  // Derive the escrow PDA address (different from event PDA)
+  const eventPubkey = new PublicKey(params.event);
   const [eventPdaAddress] = PublicKey.findProgramAddressSync(
-    [Buffer.from("event"), organizerPubkey.toBuffer()], 
+    [Buffer.from("escrow"), eventPubkey.toBuffer()], 
     programIdPubkey
   );
 
   // Calculate the bid account PDA
   const bidderPubkey = new PublicKey(params.bidder.address);
-  const eventPubkey = new PublicKey(params.event);
   
   const [bidAddress] = PublicKey.findProgramAddressSync(
     [Buffer.from("bid"), eventPubkey.toBuffer(), bidderPubkey.toBuffer()],
@@ -140,12 +242,12 @@ export async function placeBid(
     : BigInt(params.amount.toString());
 
   // Create the instruction for placing a bid
-  // Make sure to use a string for eventPda and a properly converted bigint for bidAmount
+  // Make sure to use a string for eventPda and a properly converted bigint for amount
   const placeBidIx = await programClient.getPlaceBidInstructionAsync({
     bidder: params.bidder,
     event: params.event,
     eventPda: eventPdaAddress.toString(),
-    bidAmount, // Use the validated bidAmount
+    amount: bidAmount, // Use the validated bidAmount as 'amount'
   });
 
   // Send the transaction
