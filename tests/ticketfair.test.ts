@@ -17,6 +17,12 @@ import {
   BID_STATUS
 } from "./ticketfair.test-helpers";
 import { refundBidImproved } from "./refundBid.test-fix";
+import { 
+  createWalletsWithRetry, 
+  delayWithJitter, 
+  withRetry,
+  checkTestEnvironmentHealth
+} from "./test-retry-helpers";
 
 describe("Ticketfair", () => {
   let connection: Connection;
@@ -43,16 +49,22 @@ describe("Ticketfair", () => {
   before(async () => {
     connection = await connect();
 
-    // Create all the required accounts
+    // Check test environment health before starting
+    const healthCheck = await checkTestEnvironmentHealth(connection);
+    if (!healthCheck.healthy) {
+      console.warn("Test environment issues detected:", healthCheck.issues);
+    }
+
+    // Create all the required accounts with retry mechanism
     [organizer, buyer1, buyer2, merkleTree, bubblegumProgram, logWrapper, compressionProgram, noopProgram] = 
-      await connection.createWallets(8, { airdropAmount: ONE_SOL * 10n });
+      await createWalletsWithRetry(connection, 8, ONE_SOL * 10n, "Setup wallets");
     
     // Log the structure of the organizer to debug
     console.log("Organizer structure:", Object.keys(organizer));
     console.log("Organizer address property:", organizer.address);
     
-    // Wait for airdrop transactions to confirm before starting tests
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for airdrop transactions to confirm before starting tests with jitter
+    await delayWithJitter(2000, 20);
   });
 
   describe("Event Management", () => {
@@ -65,7 +77,9 @@ describe("Ticketfair", () => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 10);
       const nanos = process.hrtime()[1];
-      return `${metadataUrl}-management-${timestamp}-${random}-${nanos}`;
+      const suiteId = Math.random().toString(36).substring(2, 6); // Additional randomness for test suite
+      const processId = process.pid.toString(36); // Process ID for uniqueness across parallel runs
+      return `${metadataUrl}-management-${timestamp}-${random}-${nanos}-${suiteId}-${processId}`;
     };
 
     it("creates a new event with valid parameters", async () => {
@@ -120,13 +134,17 @@ describe("Ticketfair", () => {
       // Get current time in seconds for auction timing
       const currentTime = Math.floor(Date.now() / 1000);
       
+      // Create a unique organizer for this finalization test
+      const [finalizeOrganizer] = await connection.createWallets(1, { airdropAmount: ONE_SOL * 10n });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // For finalization test, make start time in the past and end time VERY close to current time
       // This ensures the event can be finalized immediately
       const finalizeStartTime = BigInt(currentTime - 3600); // Start 1 hour ago
       const finalizeEndTime = BigInt(currentTime - 10); // End 10 seconds ago (already ended)
       
       const finalizeResult = await createAndActivateEvent(connection, {
-        organizer,
+        organizer: finalizeOrganizer,
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -227,6 +245,7 @@ describe("Ticketfair", () => {
     let buyerBidAddress: Address;
     let testBuyer1: KeyPairSigner;
     let testBuyer2: KeyPairSigner;
+    let testOrganizer: KeyPairSigner; // Unique organizer for this test suite
     
     // Create a truly unique identifier for each test to avoid PDA collisions
     const getUniqueMetadataUrl = () => {
@@ -234,24 +253,25 @@ describe("Ticketfair", () => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 10);
       const nanos = process.hrtime()[1];
-      return `${metadataUrl}-bidding-${timestamp}-${random}-${nanos}`;
+      const suiteId = Math.random().toString(36).substring(2, 6); // Additional randomness for test suite
+      return `${metadataUrl}-bidding-${timestamp}-${random}-${nanos}-${suiteId}`;
     };
 
     let bidEventOrganizer: KeyPairSigner; // Add to store unique organizer
     
     beforeEach(async () => {
-      // Create fresh wallets for each test to avoid PDA collisions
-      [testBuyer1, testBuyer2] = await connection.createWallets(2, { airdropAmount: ONE_SOL * 10n });
+      // Create fresh wallets for each test to avoid PDA collisions, including a unique organizer
+      [testBuyer1, testBuyer2, testOrganizer] = await createWalletsWithRetry(connection, 3, ONE_SOL * 10n, "Bidding test wallets");
       
-      // Brief delay to let the wallet creation propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Brief delay to let the wallet creation propagate with jitter
+      await delayWithJitter(1000, 15);
       
       // Get a fresh timestamp for each test
       const currentTime = Math.floor(Date.now() / 1000);
       
-      // Create and activate a fresh event for bidding tests
+      // Create and activate a fresh event for bidding tests using the unique organizer
       const result = await createAndActivateEvent(connection, {
-        organizer,
+        organizer: testOrganizer, // Use unique organizer instead of global one
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -352,9 +372,13 @@ describe("Ticketfair", () => {
       const incorrectBidUrl = getUniqueMetadataUrl() + "-incorrectbid";
       const currentTime = Math.floor(Date.now() / 1000);
       
+      // Create a unique organizer for this specific test
+      const [incorrectBidOrganizer] = await connection.createWallets(1, { airdropAmount: ONE_SOL * 10n });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Create an event with a known start/end time for predictable pricing
       const eventResult = await createAndActivateEvent(connection, {
-        organizer,
+        organizer: incorrectBidOrganizer,
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -461,10 +485,14 @@ describe("Ticketfair", () => {
       const ticketAwardUrl = getUniqueMetadataUrl() + "-ticketaward";
       const currentTime = Math.floor(Date.now() / 1000);
       
+      // Create a unique organizer for this specific test
+      const [ticketAwardOrganizer] = await connection.createWallets(1, { airdropAmount: ONE_SOL * 10n });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Create an event with known parameters
       console.log("Creating fresh event for ticket award test");
       const eventResult = await createAndActivateEvent(connection, {
-        organizer,
+        organizer: ticketAwardOrganizer,
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -603,9 +631,13 @@ describe("Ticketfair", () => {
       // Get current time in seconds
       const currentTime = Math.floor(Date.now() / 1000);
       
+      // Create a unique organizer for this specific test
+      const [smallEventOrganizer] = await connection.createWallets(1, { airdropAmount: ONE_SOL * 10n });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       console.log("Creating small event with only 1 ticket...");
       const smallEventResult = await createAndActivateEvent(connection, {
-        organizer,
+        organizer: smallEventOrganizer,
         merkleTree,
         bubblegumProgram,
         logWrapper,
@@ -732,6 +764,7 @@ describe("Ticketfair", () => {
     let refundEventPdaAddress: Address;
     let refundBuyer1: KeyPairSigner;
     let refundBuyer2: KeyPairSigner;
+    let refundTestOrganizer: KeyPairSigner; // Unique organizer for this test suite
     
     // Create a truly unique identifier for each test to avoid PDA collisions
     const getUniqueMetadataUrl = () => {
@@ -739,24 +772,25 @@ describe("Ticketfair", () => {
       const timestamp = Date.now();
       const random = Math.random().toString(36).substring(2, 10);
       const nanos = process.hrtime()[1];
-      return `${metadataUrl}-refund-${timestamp}-${random}-${nanos}`;
+      const suiteId = Math.random().toString(36).substring(2, 6); // Additional randomness for test suite
+      return `${metadataUrl}-refund-${timestamp}-${random}-${nanos}-${suiteId}`;
     };
     
     let refundEventOrganizer: KeyPairSigner; // Add to store unique organizer
     
     beforeEach(async () => {
-      // Create fresh wallets for each test to avoid PDA collisions
-      [refundBuyer1, refundBuyer2] = await connection.createWallets(2, { airdropAmount: ONE_SOL * 10n });
+      // Create fresh wallets for each test to avoid PDA collisions, including a unique organizer
+      [refundBuyer1, refundBuyer2, refundTestOrganizer] = await createWalletsWithRetry(connection, 3, ONE_SOL * 10n, "Refund test wallets");
       
-      // Brief delay to let the wallet creation propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Brief delay to let the wallet creation propagate with jitter
+      await delayWithJitter(1000, 15);
       
       // Get a fresh timestamp for each test
       const currentTime = Math.floor(Date.now() / 1000);
       
-      // Create a fresh event for refund tests with unique timing
+      // Create a fresh event for refund tests with unique timing using the unique organizer
       const result = await createAndActivateEvent(connection, {
-        organizer,
+        organizer: refundTestOrganizer, // Use unique organizer instead of global one
         merkleTree,
         bubblegumProgram,
         logWrapper,

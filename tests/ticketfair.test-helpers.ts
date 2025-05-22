@@ -131,6 +131,10 @@ export async function createAndActivateEvent(
 ) {
   // Create a unique organizer for each event to avoid PDA collisions
   // This is only for testing - in a real scenario, the organizer would be a fixed account
+  // Use a combination of timestamp, random values, and process info for maximum uniqueness
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2)}-${process.pid}`;
+  console.log(`Creating unique organizer for event: ${uniqueId}`);
+  
   const uniqueOrganizer = await connection.createWallet({ airdropAmount: 10n * 10000000000n }); // 10 SOL
   
   // Brief wait to ensure airdrop confirms
@@ -300,7 +304,13 @@ export async function placeBid(
       [Buffer.from("bid"), eventPubkey.toBuffer(), bidderPubkey.toBuffer()],
       programIdPubkey
     );
-    console.log("Bid PDA address calculated:", bidAddress.toString());
+    console.log("Bid PDA calculation details:", {
+      bidder: bidderPubkey.toString(),
+      event: eventPubkey.toString(),
+      program: programIdPubkey.toString(),
+      calculatedBidPDA: bidAddress.toString(),
+      seeds: `["bid", ${eventPubkey.toString()}, ${bidderPubkey.toString()}]`
+    });
 
     // Ensure bidAmount is properly handled as a BigInt
     // This is critical - the amount must be a valid bigint for the instruction
