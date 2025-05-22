@@ -50,9 +50,16 @@ This work session focused on resolving critical testing issues and establishing 
 - `run-tests.sh` - Automated test runner with enhanced error handling and CI/CD support
 - `debug-pda-collision.js` - Debugging script for PDA collision analysis (temporary, removed after use)
 
+#### Devnet Interaction Tools
+- `devnet-health-check.sh` - Automated program health verification and status checking
+- `test-rpc-calls.sh` - RPC API connectivity testing with comprehensive method validation
+- `create-event-devnet.ts` - Simple script to create events on devnet for testing
+- `devnet-workflow-test.ts` - Complete workflow validation with detailed step-by-step output
+
 #### Documentation
 - `TESTING.md` - Complete testing guide covering structure, execution, and troubleshooting
 - `DEPLOYMENT.md` - Comprehensive deployment instructions for all environments
+- `DEVNET-INTERACTION.md` - Complete guide for command-line and RPC program interactions
 - `WORK-SUMMARY.md` - This summary document
 
 ### 📝 Files Modified
@@ -91,6 +98,17 @@ The test runner now provides specific diagnostics:
 anchor build && anchor deploy  # Build and deploy
 npx tsx create-codama-client.ts  # Generate client
 ./run-tests.sh  # Verify deployment
+```
+
+### 4. Comprehensive Devnet Interaction Tools
+```bash
+# Quick program validation
+./devnet-health-check.sh  # Verify program deployment and health
+./test-rpc-calls.sh      # Test RPC connectivity and methods
+
+# Program interaction
+npx tsx create-event-devnet.ts     # Create single event
+npx tsx devnet-workflow-test.ts    # Full workflow validation
 ```
 
 ## Deployment Success
