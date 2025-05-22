@@ -9,3 +9,15 @@ pub use refund::*;
 
 pub mod shared;
 pub use shared::*;
+
+pub mod ticketfair_event;
+pub use ticketfair_event::*;
+
+pub mod ticketfair_ticket;
+pub use ticketfair_ticket::*;
+
+pub mod ticketfair_user;
+pub use ticketfair_user::*;
+
+pub mod ticketfair_bid;
+pub use ticketfair_bid::*;

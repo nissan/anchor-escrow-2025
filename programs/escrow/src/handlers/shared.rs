@@ -65,3 +65,13 @@ pub fn close_token_account<'info>(
         CpiContext::new(token_program.to_account_info(), close_accounts)
     })
 }
+
+/// Derive the event PDA for a given organizer pubkey
+pub fn derive_event_pda(organizer: &Pubkey, program_id: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"event", organizer.as_ref()], program_id)
+}
+
+/// Check if the given account is the Merkle Tree delegate (authority)
+pub fn is_tree_delegate(tree_delegate: &Pubkey, expected_delegate: &Pubkey) -> bool {
+    tree_delegate == expected_delegate
+}

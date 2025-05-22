@@ -3,21 +3,37 @@
   "version": "2.0.0",
   "scripts": {
     "build": "anchor build",
-    "test": "anchor test",
+    "test": "RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test",
+    "test:escrow": "RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test -- -g \"escrow\"",
+    "test:ticketfair": "RUSTUP_TOOLCHAIN=nightly-2025-04-16 anchor test",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "show-versions": "bash show-versions.sh"
+    "show-versions": "bash show-versions.sh",
+    "generate-client": "npx tsx create-codama-client.ts",
+    "demo:create-event": "npx tsx demo/examples/create-event.ts",
+    "demo:place-bid": "npx tsx demo/examples/place-bid.ts",
+    "demo:finalize": "npx tsx demo/examples/award-and-finalize.ts",
+    "demo:full-auction": "npx tsx demo/examples/demo-full-auction.ts",
+    "demo:help": "echo 'TicketFair Demo Scripts:\n  npm run demo:create-event -- --name \"Concert\" --tickets 10 --start-price 1.0 --end-price 0.2 --duration 30\n  npm run demo:place-bid -- --event EVENT_ADDRESS --bidder-name \"Alice\"\n  npm run demo:finalize -- --event EVENT_ADDRESS --close-price 0.5\n  npm run demo:full-auction -- --name \"Concert\" --tickets 5 --duration 3 --bidders 8'",
+    "demo:present": "./demo/scripts/present-3min-demo.sh",
+    "demo:3min": "./demo/scripts/demo-3min-presentation.sh",
+    "demo:turbin3": "./demo/turbin3/scripts/turbin3-90sec-demo.sh",
+    "demo:turbin3-setup": "./demo/turbin3/scripts/setup-turbin3-presentation.sh"
   },
   "license": "MIT",
   "devDependencies": {
     "@codama/nodes-from-anchor": "^1.1.8",
     "@codama/renderers": "^1.0.16",
     "@types/node": "^22.13.5",
-    "codama": "^1.2.8",
+    "codama": "^1.3.0",
     "prettier": "^3.4.2",
     "solana-kite": "^1.2.5",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@solana/kit": "^2.1.1",
+    "@solana/web3.js": "^1.98.2"
+  }
 }
